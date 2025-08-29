@@ -27,6 +27,13 @@ repositories {
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     implementation 'com.anthropic:anthropic-java:2.11.1'
+    
+    // GitHub API
+    implementation 'org.kohsuke:github-api:1.319'
+    
+    // YAML 파싱
+    implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml'
+    
     compileOnly 'org.projectlombok:lombok'
 
     annotationProcessor 'org.projectlombok:lombok'
