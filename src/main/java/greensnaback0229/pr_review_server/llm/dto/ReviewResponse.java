@@ -30,4 +30,10 @@ public class ReviewResponse {
      * 파일 요청 이유
      */
     private String reason;
+    
+    /**
+     * Feature Memory 업데이트 제안 (nullable)
+     * LLM이 리뷰를 통해 학습한 내용을 구조화하여 제안
+     */
+    private MemorySuggestion memorySuggestion;
 }
