@@ -132,15 +132,28 @@ public class PrReviewService {
             CollectedCode collectedCode = codeCollector.collectAll(
                     repoFullName, prNumber, baseBranch, filteredFiles, coreFilePaths);
             
-            // 4. 프롬프트 생성
+            // 4. CollectedCode를 Map으로 변환
+            Map<String, String> changedFilesMap = collectedCode.getChangedFiles().stream()
+                    .collect(java.util.stream.Collectors.toMap(
+                            greensnaback0229.pr_review_server.collector.dto.FileContent::getPath,
+                            greensnaback0229.pr_review_server.collector.dto.FileContent::getDiff
+                    ));
+            
+            Map<String, String> coreFilesMap = collectedCode.getCoreFiles().stream()
+                    .collect(java.util.stream.Collectors.toMap(
+                            greensnaback0229.pr_review_server.collector.dto.FileContent::getPath,
+                            greensnaback0229.pr_review_server.collector.dto.FileContent::getContent
+                    ));
+            
+            // 5. 프롬프트 생성
             String systemPrompt = promptBuilder.buildSystemPrompt();
             String initialPrompt = promptBuilder.buildInitialPrompt(
-                    resolvedFeature, collectedCode, prContext);
+                    resolvedFeature, changedFilesMap, coreFilesMap);
             
-            // 5. LLM 리뷰 요청
+            // 6. LLM 리뷰 요청
             ReviewResponse reviewResponse = llmClient.startReview(systemPrompt, initialPrompt);
             
-            // 6. 추가 파일 요청 처리 (필요시)
+            // 7. 추가 파일 요청 처리 (필요시)
             while (reviewResponse.isNeedMoreContext()) {
                 log.info("LLM requested more context: {}", reviewResponse.getRequestedFiles());
                 
@@ -151,7 +164,7 @@ public class PrReviewService {
                 break;
             }
             
-            // 7. 리뷰 집계
+            // 8. 리뷰 집계
             return reviewAggregator.aggregate(feature, reviewResponse);
             
         } catch (Exception e) {
