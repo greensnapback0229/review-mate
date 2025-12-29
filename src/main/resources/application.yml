@@ -4,7 +4,7 @@ spring:
 
 anthropic:
   api:
-    key: ${ANTHROPIC_API_KEY:your-api-key-here}
+    key: ${ANTHROPIC_API_KEY}
 
 github:
-  token: ${GITHUB_TOKEN:your-github-token-here}
+  token: ${GITHUB_TOKEN}
