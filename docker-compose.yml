@@ -2,19 +2,11 @@ version: '3.8'
 
 services:
   pr-review-server:
-    build: .
-    image: smdmim/pr-review:latest
+    image: ${DOCKER_IMAGE:-smdmim/pr-review:latest}
     container_name: pr-review-server
     ports:
-      - "8080:8080"
+      - "${PORT:-8080}:8080"
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - GITHUB_TOKEN=${GITHUB_TOKEN}
-      - SPRING_PROFILES_ACTIVE=prod
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/api/webhook/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s

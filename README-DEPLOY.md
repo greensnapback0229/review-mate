@@ -2,121 +2,85 @@
 
 ## 📋 사전 준비
 
-### 1. Docker Hub 계정
-- https://hub.docker.com 에서 계정 생성
-- Docker Hub username 확인
+### 1. API 키 준비
+- **Anthropic API Key**: https://console.anthropic.com
+- **GitHub Token**: https://github.com/settings/tokens
+  - 필요 권한: `repo`, `read:org`
 
-### 2. API 키 준비
-- Anthropic API Key: https://console.anthropic.com
-- GitHub Personal Access Token: https://github.com/settings/tokens
+### 2. Docker 설치
+- 로컬: Docker Desktop 설치
+- 서버: Docker & Docker Compose 설치
 
 ---
 
-## 🐳 Docker 빌드 & 배포
+## 🏗️ 로컬에서 빌드 & 푸시
 
-### 방법 1: 자동 배포 스크립트 (권장)
+### 1. 테스트 & 빌드 & 푸시
 
 ```bash
-# 1. 환경 변수 설정
-export ANTHROPIC_API_KEY=sk-ant-api03-xxx
-export GITHUB_TOKEN=ghp_xxx
-export DOCKER_HUB_USERNAME=your-dockerhub-username
-
-# 2. 배포 스크립트 실행
+# 권한 부여
 chmod +x deploy.sh
+
+# 배포 실행
 ./deploy.sh
 ```
 
-### 방법 2: 수동 배포
-
-```bash
-# 1. 테스트
-./gradlew test
-
-# 2. Docker 이미지 빌드
-docker build -t pr-review-server:latest .
-
-# 3. Docker Hub에 태그
-docker tag pr-review-server:latest YOUR_USERNAME/pr-review-server:latest
-
-# 4. Docker Hub 로그인 & 푸시
-docker login
-docker push YOUR_USERNAME/pr-review-server:latest
-```
+이 스크립트는:
+1. ✅ 테스트 실행
+2. ✅ Docker 이미지 빌드 (`smdmim/pr-review:latest`)
+3. ✅ Docker Hub에 푸시
 
 ---
 
-## 🖥️ 서버에서 실행
+## 🖥️ 서버에 배포
 
-### Option A: docker run
+### 1. 파일 준비
 
+서버에 다음 파일들 업로드:
+
+**docker-compose.yml** (이미 있음)
+
+**.env** (새로 생성)
 ```bash
-# 1. 이미지 다운로드
-docker pull YOUR_USERNAME/pr-review-server:latest
-
-# 2. 컨테이너 실행
-docker run -d \
-  --name pr-review-server \
-  -p 8080:8080 \
-  -e ANTHROPIC_API_KEY=sk-ant-api03-xxx \
-  -e GITHUB_TOKEN=ghp_xxx \
-  --restart unless-stopped \
-  YOUR_USERNAME/pr-review-server:latest
-
-# 3. 로그 확인
-docker logs -f pr-review-server
-
-# 4. Health check
-curl http://localhost:8080/api/webhook/health
+DOCKER_IMAGE=smdmim/pr-review:latest
+PORT=8080
+ANTHROPIC_API_KEY=sk-ant-api03-your-actual-key
+GITHUB_TOKEN=ghp_your-actual-token
 ```
 
-### Option B: docker-compose (권장)
+### 2. 실행
 
 ```bash
-# 1. .env 파일 생성
-cat > .env << EOF
-ANTHROPIC_API_KEY=sk-ant-api03-xxx
-GITHUB_TOKEN=ghp_xxx
-DOCKER_HUB_USERNAME=your-username
-EOF
+# 이미지 다운로드
+docker-compose pull
 
-# 2. docker-compose.yml 수정
-# image: pr-review-server:latest
-# → image: YOUR_USERNAME/pr-review-server:latest
-
-# 3. 실행
+# 백그라운드 실행
 docker-compose up -d
 
-# 4. 로그 확인
+# 로그 확인
 docker-compose logs -f
+```
 
-# 5. 중지
-docker-compose down
+### 3. 확인
+
+```bash
+# Health check
+curl http://localhost:8080/api/webhook/health
+
+# 응답: "PR Review Server is running"
 ```
 
 ---
 
-## 🔧 로컬 테스트 (배포 전)
+## 🔄 업데이트
 
 ```bash
-# 1. 로컬 빌드
-docker build -t pr-review-server:latest .
+# 1. 로컬에서 새 이미지 푸시
+./deploy.sh
 
-# 2. 로컬 실행
-docker run -d \
-  --name pr-review-server-test \
-  -p 8080:8080 \
-  -e ANTHROPIC_API_KEY=your-key \
-  -e GITHUB_TOKEN=your-token \
-  pr-review-server:latest
-
-# 3. 테스트
-curl http://localhost:8080/api/webhook/health
-curl http://localhost:8080/api/test/ping
-
-# 4. 정리
-docker stop pr-review-server-test
-docker rm pr-review-server-test
+# 2. 서버에서 업데이트
+docker-compose pull
+docker-compose up -d
 ```
 
 ---
@@ -124,106 +88,124 @@ docker rm pr-review-server-test
 ## 🌐 GitHub Webhook 설정
 
 ### 1. 서버 URL 확인
-- 서버 IP: `http://YOUR_SERVER_IP:8080`
-- ngrok (테스트용): `https://xxx.ngrok.io`
+- `http://YOUR_SERVER_IP:8080` 또는
+- `https://your-domain.com` (도메인 사용시)
 
 ### 2. GitHub 설정
-1. 저장소 → Settings → Webhooks → Add webhook
-2. Payload URL: `http://YOUR_SERVER_IP:8080/api/webhook/github/pr`
-3. Content type: `application/json`
-4. Events: `Pull requests` 선택
-5. Active 체크
-6. Add webhook
+1. 저장소 → **Settings** → **Webhooks** → **Add webhook**
+2. **Payload URL**: `http://YOUR_SERVER_IP:8080/api/webhook/github/pr`
+3. **Content type**: `application/json`
+4. **Events**: `Pull requests` 선택
+5. **Active** 체크
+6. **Add webhook**
 
 ### 3. 테스트
 - 테스트 PR 생성
-- 서버 로그 확인: `docker logs -f pr-review-server`
+- 서버 로그 확인: `docker-compose logs -f`
 
 ---
 
 ## 📊 유용한 명령어
 
 ```bash
-# 컨테이너 상태 확인
-docker ps
-docker ps -a
+# 상태 확인
+docker-compose ps
 
-# 로그 실시간 확인
-docker logs -f pr-review-server
+# 로그 보기
+docker-compose logs -f
 
-# 컨테이너 내부 접속
-docker exec -it pr-review-server /bin/bash
+# 재시작
+docker-compose restart
 
-# 리소스 사용량 확인
-docker stats pr-review-server
+# 중지
+docker-compose down
 
-# 이미지 확인
-docker images
+# 중지 & 삭제
+docker-compose down -v
+```
 
-# 컨테이너 재시작
-docker restart pr-review-server
+---
 
-# 컨테이너 삭제
-docker stop pr-review-server
-docker rm pr-review-server
+## 🔧 포트 변경
+
+**.env 파일 수정:**
+```bash
+PORT=9000  # 원하는 포트
+```
+
+**재시작:**
+```bash
+docker-compose down
+docker-compose up -d
 ```
 
 ---
 
 ## 🔍 트러블슈팅
 
-### 문제 1: 컨테이너가 시작 후 바로 종료됨
+### 컨테이너가 시작되지 않음
 ```bash
 # 로그 확인
-docker logs pr-review-server
+docker-compose logs
 
-# 일반적 원인:
-# - API 키가 설정되지 않음
-# - 포트가 이미 사용 중
+# 환경 변수 확인
+docker-compose config
 ```
 
-### 문제 2: Health check 실패
+### API 키 오류
 ```bash
-# 컨테이너 상태 확인
-docker inspect pr-review-server
+# .env 파일 확인
+cat .env
 
-# 포트 확인
+# 키가 제대로 설정되었는지 확인
+docker-compose exec pr-review-server env | grep API
+```
+
+### 포트 충돌
+```bash
+# 포트 사용 중 확인
 netstat -tulpn | grep 8080
+
+# .env에서 다른 포트로 변경
 ```
 
-### 문제 3: GitHub Webhook이 도달하지 않음
-```bash
-# 방화벽 확인
-sudo ufw status
-sudo ufw allow 8080
+---
 
-# 서버 로그 확인
-docker logs -f pr-review-server
+## 📁 서버 파일 구조
+
 ```
+/your/deploy/directory/
+├── docker-compose.yml
+└── .env
+```
+
+간단! 🎉
 
 ---
 
 ## 🎯 Quick Start
 
+**로컬에서:**
 ```bash
-# 1. 로컬에서 빌드 & 푸시
-export DOCKER_HUB_USERNAME=your-username
-export ANTHROPIC_API_KEY=your-key
-export GITHUB_TOKEN=your-token
 ./deploy.sh
+```
 
-# 2. 서버에서 실행
-docker pull your-username/pr-review-server:latest
-docker run -d \
-  --name pr-review-server \
-  -p 8080:8080 \
-  -e ANTHROPIC_API_KEY=your-key \
-  -e GITHUB_TOKEN=your-token \
-  --restart unless-stopped \
-  your-username/pr-review-server:latest
+**서버에서:**
+```bash
+# .env 파일 생성
+cat > .env << EOF
+DOCKER_IMAGE=smdmim/pr-review:latest
+PORT=8080
+ANTHROPIC_API_KEY=sk-ant-api03-xxx
+GITHUB_TOKEN=ghp_xxx
+EOF
 
-# 3. 확인
+# 실행
+docker-compose pull
+docker-compose up -d
+
+# 확인
 curl http://localhost:8080/api/webhook/health
 ```
 
-완료! 🎉
+완료! 🚀
