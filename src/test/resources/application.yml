@@ -1,0 +1,10 @@
+spring:
+  application:
+    name: pr-review-server-test
+
+anthropic:
+  api:
+    key: test-key
+
+github:
+  token: test-token

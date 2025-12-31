@@ -70,13 +70,14 @@ class FeatureRegistryLoaderTest {
     void parseYaml_빈_YAML() throws Exception {
         // given
         String yaml = """
-                features:
+                features: {}
                 """;
 
         // when
         Map<String, FeatureDefinition> result = parseYamlFromString(yaml);
 
         // then
+        assertNotNull(result);
         assertTrue(result.isEmpty());
     }
 
