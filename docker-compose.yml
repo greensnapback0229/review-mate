@@ -2,10 +2,10 @@ version: '3.8'
 
 services:
   pr-review-server:
-    image: ${DOCKER_IMAGE:-smdmim/pr-review:latest}
+    image: ${DOCKER_IMAGE}
     container_name: pr-review-server
     ports:
-      - "${PORT:-8080}:8080"
+      - "${PORT}:8080"
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - GITHUB_TOKEN=${GITHUB_TOKEN}
