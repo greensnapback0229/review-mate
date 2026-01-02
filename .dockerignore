@@ -4,27 +4,37 @@
 
 # Gradle
 .gradle
-build/
-!gradle/wrapper/gradle-wrapper.jar
+gradle
+gradlew
+gradlew.bat
+build.gradle
+settings.gradle
+
+# Source code (we only need the JAR)
+src
 
 # IDE
-.idea/
+.idea
 *.iml
-*.iws
-*.ipr
-out/
-.vscode/
+.vscode
 
-# OS
-.DS_Store
-Thumbs.db
+# Docker
+Dockerfile
+.dockerignore
+docker-compose.yml
+.env
+.env.example
+
+# Documentation
+README.md
+README-DEPLOY.md
+
+# Scripts
+deploy.sh
 
 # Logs
 *.log
 
-# Test
-*.test
-
-# Environment
-.env
-.env.local
+# OS
+.DS_Store
+Thumbs.db

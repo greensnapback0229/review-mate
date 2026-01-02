@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # PR Review Server 배포 스크립트
-# Docker Hub에 이미지 푸시까지만 수행
+# 로컬에서 빌드 후 Docker Hub에 푸시
 
 set -e
 
@@ -22,18 +22,23 @@ echo -e "\n${YELLOW}1️⃣ 테스트 실행${NC}"
 ./gradlew test
 echo -e "${GREEN}✅ 테스트 통과${NC}"
 
-# 2. Docker buildx 설정 (멀티 플랫폼 빌드)
-echo -e "\n${YELLOW}2️⃣ Docker buildx 설정${NC}"
-docker buildx create --use --name multiarch-builder --driver docker-container || docker buildx use multiarch-builder
+# 2. Gradle로 JAR 빌드
+echo -e "\n${YELLOW}2️⃣ JAR 파일 빌드${NC}"
+./gradlew clean bootJar
+echo -e "${GREEN}✅ JAR 빌드 완료${NC}"
+
+# 3. Docker buildx 설정 (멀티 플랫폼 빌드)
+echo -e "\n${YELLOW}3️⃣ Docker buildx 설정${NC}"
+docker buildx create --use --name multiarch-builder --driver docker-container 2>/dev/null || docker buildx use multiarch-builder
 echo -e "${GREEN}✅ Buildx 설정 완료${NC}"
 
-# 3. Docker Hub에 로그인
-echo -e "\n${YELLOW}3️⃣ Docker Hub 로그인${NC}"
+# 4. Docker Hub에 로그인
+echo -e "\n${YELLOW}4️⃣ Docker Hub 로그인${NC}"
 docker login
 echo -e "${GREEN}✅ 로그인 완료${NC}"
 
-# 4. 멀티 플랫폼 이미지 빌드 & 푸시
-echo -e "\n${YELLOW}4️⃣ Docker 멀티 플랫폼 빌드 & 푸시 (linux/amd64, linux/arm64)${NC}"
+# 5. 멀티 플랫폼 이미지 빌드 & 푸시
+echo -e "\n${YELLOW}5️⃣ Docker 멀티 플랫폼 빌드 & 푸시 (linux/amd64, linux/arm64)${NC}"
 docker buildx build --platform linux/amd64,linux/arm64 \
   -t ${DOCKER_IMAGE}:${DOCKER_TAG} \
   --push \

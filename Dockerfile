@@ -1,24 +1,5 @@
-# Multi-stage build for smaller image size
+# Simple Dockerfile using pre-built JAR
 
-# Stage 1: Build
-FROM gradle:8.5-jdk21 AS build
-
-WORKDIR /app
-
-# Copy gradle files
-COPY build.gradle settings.gradle ./
-COPY gradle ./gradle
-
-# Download dependencies (cached layer)
-RUN gradle dependencies --no-daemon
-
-# Copy source code
-COPY src ./src
-
-# Build the application
-RUN gradle bootJar --no-daemon
-
-# Stage 2: Runtime
 FROM eclipse-temurin:21-jre-jammy
 
 WORKDIR /app
@@ -26,8 +7,8 @@ WORKDIR /app
 # Create non-root user
 RUN groupadd -r spring && useradd -r -g spring spring
 
-# Copy jar from build stage
-COPY --from=build /app/build/libs/*.jar app.jar
+# Copy pre-built JAR file
+COPY build/libs/*.jar app.jar
 
 # Change ownership
 RUN chown -R spring:spring /app
