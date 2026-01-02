@@ -1,7 +1,7 @@
 # Multi-stage build for smaller image size
 
 # Stage 1: Build
-FROM gradle:8.14-jdk21 AS build
+FROM gradle:8.5-jdk21 AS build
 
 WORKDIR /app
 
