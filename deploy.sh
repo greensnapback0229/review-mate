@@ -22,20 +22,23 @@ echo -e "\n${YELLOW}1️⃣ 테스트 실행${NC}"
 ./gradlew test
 echo -e "${GREEN}✅ 테스트 통과${NC}"
 
-# 2. Docker 이미지 빌드
-echo -e "\n${YELLOW}2️⃣ Docker 이미지 빌드${NC}"
-docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} .
-echo -e "${GREEN}✅ 이미지 빌드 완료${NC}"
+# 2. Docker buildx 설정 (멀티 플랫폼 빌드)
+echo -e "\n${YELLOW}2️⃣ Docker buildx 설정${NC}"
+docker buildx create --use --name multiarch-builder --driver docker-container || docker buildx use multiarch-builder
+echo -e "${GREEN}✅ Buildx 설정 완료${NC}"
 
 # 3. Docker Hub에 로그인
 echo -e "\n${YELLOW}3️⃣ Docker Hub 로그인${NC}"
 docker login
 echo -e "${GREEN}✅ 로그인 완료${NC}"
 
-# 4. Docker Hub에 푸시
-echo -e "\n${YELLOW}4️⃣ Docker Hub에 푸시${NC}"
-docker push ${DOCKER_IMAGE}:${DOCKER_TAG}
-echo -e "${GREEN}✅ 이미지 푸시 완료${NC}"
+# 4. 멀티 플랫폼 이미지 빌드 & 푸시
+echo -e "\n${YELLOW}4️⃣ Docker 멀티 플랫폼 빌드 & 푸시 (linux/amd64, linux/arm64)${NC}"
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -t ${DOCKER_IMAGE}:${DOCKER_TAG} \
+  --push \
+  .
+echo -e "${GREEN}✅ 이미지 빌드 & 푸시 완료${NC}"
 
 # 완료
 echo -e "\n${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -43,3 +46,4 @@ echo -e "${GREEN}🎉 배포 완료!${NC}"
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "\n${YELLOW}📦 이미지:${NC} ${GREEN}${DOCKER_IMAGE}:${DOCKER_TAG}${NC}"
 echo -e "${YELLOW}🔗 Docker Hub:${NC} ${GREEN}https://hub.docker.com/r/smdmim/pr-review${NC}"
+echo -e "${YELLOW}🏗️  플랫폼:${NC} ${GREEN}linux/amd64, linux/arm64${NC}"
