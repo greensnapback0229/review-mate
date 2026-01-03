@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 public class WebhookController {
     
     private final PrReviewService prReviewService;
+    private final greensnaback0229.pr_review_server.github.GitHubCommentService gitHubCommentService;
     
     /**
      * GitHub PR 이벤트 Webhook 엔드포인트
@@ -44,17 +45,24 @@ public class WebhookController {
             String prTitle = pr.getTitle();
             String prBody = pr.getBody();
             String baseBranch = pr.getBase().getRef();
+            String headBranch = pr.getHead().getRef();
             
             log.info("Processing PR: {}/#{} - {}", repoFullName, prNumber, prTitle);
             
             // 리뷰 수행
             String review = prReviewService.reviewPullRequest(
-                    repoFullName, prNumber, prTitle, prBody, baseBranch);
+                    repoFullName, prNumber, prTitle, prBody, baseBranch, headBranch);
             
-            // TODO: GitHub에 코멘트 등록
-            // 현재는 로그만 출력
+            // GitHub에 코멘트 작성
+            try {
+                gitHubCommentService.postReviewComment(repoFullName, prNumber, review);
+                log.info("Review comment posted successfully for {}/#{}", repoFullName, prNumber);
+            } catch (Exception e) {
+                log.error("Failed to post comment, but review completed: {}", e.getMessage());
+                // 코멘트 작성 실패해도 리뷰는 완료된 것으로 처리
+            }
+            
             log.info("Review completed for {}/#{}", repoFullName, prNumber);
-            log.debug("Review result:\n{}", review);
             
             return ResponseEntity.ok("Review completed for PR #" + prNumber);
             

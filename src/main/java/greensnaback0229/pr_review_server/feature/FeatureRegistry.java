@@ -28,7 +28,19 @@ public class FeatureRegistry {
      * @throws IOException 로드 실패 시
      */
     public void initialize(String repoFullName, String githubToken) throws IOException {
-        this.registry = loader.loadFromRepository(repoFullName, githubToken);
+        initialize(repoFullName, githubToken, null);
+    }
+
+    /**
+     * GitHub 저장소의 특정 브랜치에서 feature-registry.yml을 로드하여 초기화
+     * 
+     * @param repoFullName 저장소 전체 이름 (예: "owner/repo")
+     * @param githubToken GitHub API 토큰
+     * @param branch 브랜치명 (null이면 기본 브랜치)
+     * @throws IOException 로드 실패 시
+     */
+    public void initialize(String repoFullName, String githubToken, String branch) throws IOException {
+        this.registry = loader.loadFromRepository(repoFullName, githubToken, branch);
     }
 
     /**

@@ -47,15 +47,16 @@ public class PrReviewService {
 	 * @param prTitle PR 제목
 	 * @param prBody PR 본문
 	 * @param baseBranch Base 브랜치명
+	 * @param headBranch Head 브랜치명 (PR 브랜치)
 	 * @return 최종 병합된 리뷰 결과
 	 */
 	public String reviewPullRequest(String repoFullName, int prNumber, String prTitle,
-		String prBody, String baseBranch) {
+		String prBody, String baseBranch, String headBranch) {
 		log.info("Starting PR review for {}/#{}", repoFullName, prNumber);
 
 		try {
-			// 1. Feature Registry 초기화
-			featureRegistry.initialize(repoFullName, null); // GitHub token은 이미 설정됨
+			// 1. Feature Registry 초기화 (PR 브랜치에서 읽기)
+			featureRegistry.initialize(repoFullName, null, headBranch);
 
 			// 2. PR 파싱
 			List<String> changedFiles = codeCollector.getChangedFilePaths(repoFullName, prNumber);
