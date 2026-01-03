@@ -15,6 +15,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -53,7 +54,7 @@ class FeatureRegistryTest {
     @Test
     void initialize_성공() throws IOException {
         // given
-        when(loader.loadFromRepository(anyString(), anyString())).thenReturn(mockRegistry);
+        when(loader.loadFromRepository(anyString(), anyString(), isNull())).thenReturn(mockRegistry);
 
         // when
         registry.initialize("owner/repo", "token");
@@ -66,7 +67,7 @@ class FeatureRegistryTest {
     @Test
     void getFeature_존재하는_기능() throws IOException {
         // given
-        when(loader.loadFromRepository(anyString(), anyString())).thenReturn(mockRegistry);
+        when(loader.loadFromRepository(anyString(), anyString(), isNull())).thenReturn(mockRegistry);
         registry.initialize("owner/repo", "token");
 
         // when
@@ -81,7 +82,7 @@ class FeatureRegistryTest {
     @Test
     void getFeature_존재하지_않는_기능() throws IOException {
         // given
-        when(loader.loadFromRepository(anyString(), anyString())).thenReturn(mockRegistry);
+        when(loader.loadFromRepository(anyString(), anyString(), isNull())).thenReturn(mockRegistry);
         registry.initialize("owner/repo", "token");
 
         // when
@@ -94,7 +95,7 @@ class FeatureRegistryTest {
     @Test
     void getAllFeatures_모든_기능_조회() throws IOException {
         // given
-        when(loader.loadFromRepository(anyString(), anyString())).thenReturn(mockRegistry);
+        when(loader.loadFromRepository(anyString(), anyString(), isNull())).thenReturn(mockRegistry);
         registry.initialize("owner/repo", "token");
 
         // when
@@ -107,7 +108,7 @@ class FeatureRegistryTest {
     @Test
     void hasFeature_존재_여부_확인() throws IOException {
         // given
-        when(loader.loadFromRepository(anyString(), anyString())).thenReturn(mockRegistry);
+        when(loader.loadFromRepository(anyString(), anyString(), isNull())).thenReturn(mockRegistry);
         registry.initialize("owner/repo", "token");
 
         // when & then
