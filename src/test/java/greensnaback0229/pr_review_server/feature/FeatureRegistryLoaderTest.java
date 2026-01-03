@@ -3,6 +3,7 @@ package greensnaback0229.pr_review_server.feature;
 import greensnaback0229.pr_review_server.feature.dto.FeatureDefinition;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.kohsuke.github.GitHub;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -10,6 +11,7 @@ import java.io.InputStream;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
 
 class FeatureRegistryLoaderTest {
 
@@ -17,7 +19,8 @@ class FeatureRegistryLoaderTest {
 
     @BeforeEach
     void setUp() {
-        loader = new FeatureRegistryLoader();
+        GitHub github = mock(GitHub.class);
+        loader = new FeatureRegistryLoader(github);
     }
 
     @Test
