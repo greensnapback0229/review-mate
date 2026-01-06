@@ -53,10 +53,14 @@ public class GitHubAppAuthenticator {
         if (cachedToken != null && tokenExpiresAt != null 
             && Instant.now().isBefore(tokenExpiresAt.minusSeconds(300))) { // 5분 여유
             log.debug("Using cached installation token");
+            log.debug("Cached token (first 20 chars): {}...", cachedToken.substring(0, Math.min(20, cachedToken.length())));
             return cachedToken;
         }
         
         log.info("Generating new installation token");
+        log.info("App ID: {}", appId);
+        log.info("Installation ID: {}", installationId);
+        log.info("Private Key Path: {}", privateKeyPath);
         
         // 1. JWT 생성
         String jwt = generateJWT();
@@ -76,13 +80,22 @@ public class GitHubAppAuthenticator {
         
         ResponseEntity<Map> response = restTemplate.postForEntity(url, entity, Map.class);
         
+        log.info("GitHub API response status: {}", response.getStatusCode());
+        log.info("Response body: {}", response.getBody());
+        
         if (response.getStatusCode() == HttpStatus.CREATED) {
             Map<String, Object> body = response.getBody();
             cachedToken = (String) body.get("token");
             String expiresAt = (String) body.get("expires_at");
             tokenExpiresAt = Instant.parse(expiresAt);
             
-            log.info("Installation token generated successfully, expires at: {}", expiresAt);
+            // 권한 정보 로깅
+            Map<String, Object> permissions = (Map<String, Object>) body.get("permissions");
+            log.info("Installation token generated successfully");
+            log.info("Token expires at: {}", expiresAt);
+            log.info("Token (first 20 chars): {}...", cachedToken.substring(0, Math.min(20, cachedToken.length())));
+            log.info("Permissions: {}", permissions);
+            
             return cachedToken;
         } else {
             throw new RuntimeException("Failed to get installation token: " + response.getStatusCode());
