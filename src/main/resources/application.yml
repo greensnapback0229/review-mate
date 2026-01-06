@@ -7,4 +7,9 @@ anthropic:
     key: ${ANTHROPIC_API_KEY}
 
 github:
-  token: ${GITHUB_TOKEN}
+  app:
+    id: ${GITHUB_APP_ID}
+    installation-id: ${GITHUB_APP_INSTALLATION_ID}
+    private-key-path: ${GITHUB_APP_PRIVATE_KEY_PATH:secrets/review-mate-ai.2026-01-05.private-key.pem}
+  webhook:
+    secret: ${GITHUB_WEBHOOK_SECRET}

@@ -34,6 +34,14 @@ dependencies {
     // YAML 파싱
     implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml'
     
+    // JWT for GitHub App Authentication
+    implementation 'io.jsonwebtoken:jjwt-api:0.12.3'
+    implementation 'io.jsonwebtoken:jjwt-impl:0.12.3'
+    implementation 'io.jsonwebtoken:jjwt-jackson:0.12.3'
+    
+    // Bouncy Castle for reading PEM files
+    implementation 'org.bouncycastle:bcpkix-jdk18on:1.77'
+    
     compileOnly 'org.projectlombok:lombok'
 
     annotationProcessor 'org.projectlombok:lombok'
