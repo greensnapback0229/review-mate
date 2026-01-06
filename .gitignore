@@ -8,6 +8,7 @@ build/
 ### ENV ###
 *.env
 **.pem
+deploy-**
 
 ### STS ###
 .apt_generated
