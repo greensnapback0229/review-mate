@@ -6,6 +6,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+
 /**
  * GitHub Webhook 이벤트를 수신하는 컨트롤러
  */
@@ -19,16 +22,31 @@ public class WebhookController {
     private final greensnaback0229.pr_review_server.github.GitHubCommentService gitHubCommentService;
     
     /**
+     * 처리된 webhook delivery ID를 추적하는 Set (중복 이벤트 방지)
+     * X-GitHub-Delivery 헤더 값을 저장하여 동일한 이벤트가 재전송되는 것을 방지
+     */
+    private final Set<String> processedDeliveryIds = ConcurrentHashMap.newKeySet();
+    
+    /**
      * GitHub PR 이벤트 Webhook 엔드포인트
      *
+     * @param deliveryId GitHub webhook delivery ID (X-GitHub-Delivery 헤더)
      * @param payload GitHub webhook payload
      * @return 처리 결과
      */
     @PostMapping("/github/pr")
-    public ResponseEntity<String> handlePullRequestEvent(@RequestBody WebhookPayload payload) {
+    public ResponseEntity<String> handlePullRequestEvent(
+            @RequestHeader(value = "X-GitHub-Delivery", required = false) String deliveryId,
+            @RequestBody WebhookPayload payload) {
         try {
+            // 중복 이벤트 체크
+            if (deliveryId != null && !processedDeliveryIds.add(deliveryId)) {
+                log.info("Duplicate webhook delivery ignored: {}", deliveryId);
+                return ResponseEntity.ok("Duplicate delivery ignored");
+            }
+            
             String action = payload.getAction();
-            log.info("Received PR webhook event: action={}", action);
+            log.info("Received PR webhook event: action={}, deliveryId={}", action, deliveryId);
             
             // opened, synchronize 이벤트만 처리
             if (!isReviewableAction(action)) {
