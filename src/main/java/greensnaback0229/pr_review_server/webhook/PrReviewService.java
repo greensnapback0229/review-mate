@@ -70,7 +70,7 @@ public class PrReviewService {
 			// Main features 리뷰
 			for (String feature : prContext.getMainFeatures()) {
 				AggregatedReview review = reviewFeature(repoFullName, prNumber, baseBranch,
-					feature, prContext, changedFiles);
+					headBranch, feature, prContext, changedFiles);
 				if (review != null) {
 					reviews.add(review);
 				}
@@ -79,7 +79,7 @@ public class PrReviewService {
 			// Related features 리뷰
 			for (String feature : prContext.getRelatedFeatures()) {
 				AggregatedReview review = reviewFeature(repoFullName, prNumber, baseBranch,
-					feature, prContext, changedFiles);
+					headBranch, feature, prContext, changedFiles);
 				if (review != null) {
 					reviews.add(review);
 				}
@@ -102,14 +102,15 @@ public class PrReviewService {
 	 *
 	 * @param repoFullName 저장소 풀네임
 	 * @param prNumber PR 번호
-	 * @param baseBranch Base 브랜치
+	 * @param baseBranch Base 브랜치 (현재 사용하지 않음)
+	 * @param headBranch Head 브랜치 (PR 브랜치 - 실제 코드 수집에 사용)
 	 * @param feature 기능 이름
 	 * @param prContext PR 컨텍스트
 	 * @param changedFiles 변경된 파일 목록
 	 * @return 집계된 리뷰 결과
 	 */
 	private AggregatedReview reviewFeature(String repoFullName, int prNumber, String baseBranch,
-		String feature, PrContext prContext, List<String> changedFiles) {
+		String headBranch, String feature, PrContext prContext, List<String> changedFiles) {
 		try {
 			log.info("Reviewing feature: {}", feature);
 
@@ -129,12 +130,12 @@ public class PrReviewService {
 				return null;
 			}
 
-			// 3. 코드 수집
+			// 3. 코드 수집 (PR의 head 브랜치에서 수집)
 			FeatureDefinition definition = resolvedFeature.getDefinition();
 			List<String> coreFilePaths = definition.getCoreFiles();
 
 			CollectedCode collectedCode = codeCollector.collectAll(
-				repoFullName, prNumber, baseBranch, filteredFiles, coreFilePaths);
+				repoFullName, prNumber, headBranch, filteredFiles, coreFilePaths);
 
 			// 4. CollectedCode를 Map으로 변환
 			Map<String, String> changedFilesMap = collectedCode.getChangedFiles().stream()
