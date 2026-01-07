@@ -93,13 +93,14 @@ class CodeCollectorTest {
         List<String> coreFilePaths = Arrays.asList(
                 "src/main/java/PaymentValidator.java"
         );
+        List<String> changedFilePaths = Arrays.asList(); // 빈 리스트
         
         when(github.getRepository(repoFullName)).thenReturn(repository);
         when(repository.getFileContent("src/main/java/PaymentValidator.java", branch)).thenReturn(ghContent);
         when(ghContent.getContent()).thenReturn("public class PaymentValidator {}");
         
         // when
-        List<FileContent> result = codeCollector.collectCoreFiles(repoFullName, branch, coreFilePaths);
+        List<FileContent> result = codeCollector.collectCoreFiles(repoFullName, branch, coreFilePaths, changedFilePaths);
         
         // then
         assertThat(result).hasSize(1);
@@ -117,13 +118,14 @@ class CodeCollectorTest {
         List<String> additionalFilePaths = Arrays.asList(
                 "src/main/java/MoneyUtils.java"
         );
+        List<String> changedFilePaths = Arrays.asList(); // 빈 리스트
         
         when(github.getRepository(repoFullName)).thenReturn(repository);
         when(repository.getFileContent("src/main/java/MoneyUtils.java", branch)).thenReturn(ghContent);
         when(ghContent.getContent()).thenReturn("public class MoneyUtils {}");
         
         // when
-        List<FileContent> result = codeCollector.collectAdditionalFiles(repoFullName, branch, additionalFilePaths);
+        List<FileContent> result = codeCollector.collectAdditionalFiles(repoFullName, branch, additionalFilePaths, changedFilePaths);
         
         // then
         assertThat(result).hasSize(1);
@@ -218,6 +220,7 @@ class CodeCollectorTest {
                 "src/main/java/PaymentValidator.java",
                 "src/main/java/NonExistent.java"
         );
+        List<String> changedFilePaths = Arrays.asList(); // 빈 리스트
         
         when(github.getRepository(repoFullName)).thenReturn(repository);
         when(repository.getFileContent("src/main/java/PaymentValidator.java", branch)).thenReturn(ghContent);
@@ -226,7 +229,7 @@ class CodeCollectorTest {
                 .thenThrow(new IOException("File not found"));
         
         // when
-        List<FileContent> result = codeCollector.collectCoreFiles(repoFullName, branch, coreFilePaths);
+        List<FileContent> result = codeCollector.collectCoreFiles(repoFullName, branch, coreFilePaths, changedFilePaths);
         
         // then
         assertThat(result).hasSize(1);

@@ -70,10 +70,42 @@ public class CodeCollector {
      * @param repoFullName 저장소 풀네임
      * @param branch 브랜치명 (보통 PR의 base 브랜치)
      * @param coreFilePaths 핵심 파일 경로 리스트
+     * @param changedFilePaths 변경된 파일 경로 리스트 (경로 매칭에 사용)
      * @return 수집된 핵심 파일 목록
      */
-    public List<FileContent> collectCoreFiles(String repoFullName, String branch, List<String> coreFilePaths) {
-        return collectFiles(repoFullName, branch, coreFilePaths, FileContent.FileType.CORE);
+    public List<FileContent> collectCoreFiles(String repoFullName, String branch, 
+                                               List<String> coreFilePaths, List<String> changedFilePaths) {
+        // 코어 파일 경로를 실제 경로로 변환 (파일명만 있으면 changedFiles에서 전체 경로 찾기)
+        List<String> resolvedPaths = coreFilePaths.stream()
+                .map(corePath -> resolveFilePath(corePath, changedFilePaths))
+                .collect(Collectors.toList());
+        
+        return collectFiles(repoFullName, branch, resolvedPaths, FileContent.FileType.CORE);
+    }
+    
+    /**
+     * 코어 파일 경로를 실제 경로로 변환
+     * - 전체 경로면 그대로 사용
+     * - 파일명만 있으면 changedFiles에서 매칭되는 경로 찾기
+     */
+    private String resolveFilePath(String corePath, List<String> changedFilePaths) {
+        // 이미 전체 경로인 경우 (/ 포함)
+        if (corePath.contains("/")) {
+            return corePath;
+        }
+        
+        // 파일명만 있는 경우 - changedFiles에서 같은 파일명 찾기
+        for (String changedPath : changedFilePaths) {
+            String fileName = changedPath.substring(changedPath.lastIndexOf('/') + 1);
+            if (fileName.equals(corePath)) {
+                log.info("Resolved core file path: {} -> {}", corePath, changedPath);
+                return changedPath;
+            }
+        }
+        
+        // 매칭 실패 - 원래 경로 반환 (404 발생할 것)
+        log.warn("Could not resolve core file path: {} (not found in changed files)", corePath);
+        return corePath;
     }
     
     /**
@@ -82,10 +114,17 @@ public class CodeCollector {
      * @param repoFullName 저장소 풀네임
      * @param branch 브랜치명
      * @param additionalFilePaths 추가 요청 파일 경로 리스트
+     * @param changedFilePaths 변경된 파일 경로 리스트 (경로 매칭에 사용)
      * @return 수집된 추가 파일 목록
      */
-    public List<FileContent> collectAdditionalFiles(String repoFullName, String branch, List<String> additionalFilePaths) {
-        return collectFiles(repoFullName, branch, additionalFilePaths, FileContent.FileType.ADDITIONAL);
+    public List<FileContent> collectAdditionalFiles(String repoFullName, String branch, 
+                                                     List<String> additionalFilePaths, List<String> changedFilePaths) {
+        // 추가 파일 경로도 실제 경로로 변환
+        List<String> resolvedPaths = additionalFilePaths.stream()
+                .map(path -> resolveFilePath(path, changedFilePaths))
+                .collect(Collectors.toList());
+        
+        return collectFiles(repoFullName, branch, resolvedPaths, FileContent.FileType.ADDITIONAL);
     }
     
     /**
@@ -141,7 +180,9 @@ public class CodeCollector {
     public CollectedCode collectAll(String repoFullName, int prNumber, String branch, 
                                      List<String> filteredPaths, List<String> coreFilePaths) {
         List<FileContent> changedFiles = collectChangedFiles(repoFullName, prNumber, filteredPaths);
-        List<FileContent> coreFiles = collectCoreFiles(repoFullName, branch, coreFilePaths);
+        
+        // 코어 파일 수집 시 변경된 파일 경로를 함께 전달 (경로 매칭용)
+        List<FileContent> coreFiles = collectCoreFiles(repoFullName, branch, coreFilePaths, filteredPaths);
         
         return CollectedCode.builder()
                 .changedFiles(changedFiles)
