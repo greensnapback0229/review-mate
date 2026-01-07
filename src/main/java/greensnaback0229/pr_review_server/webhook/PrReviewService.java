@@ -133,6 +133,9 @@ public class PrReviewService {
 			// 3. 코드 수집 (PR의 head 브랜치에서 수집)
 			FeatureDefinition definition = resolvedFeature.getDefinition();
 			List<String> coreFilePaths = definition.getCoreFiles();
+			
+			log.info("Core files from feature registry: {}", coreFilePaths);
+			log.info("Filtered changed files: {}", filteredFiles);
 
 			CollectedCode collectedCode = codeCollector.collectAll(
 				repoFullName, prNumber, headBranch, filteredFiles, coreFilePaths);

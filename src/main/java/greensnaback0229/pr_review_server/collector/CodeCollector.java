@@ -96,9 +96,12 @@ public class CodeCollector {
             GHRepository repo = github.getRepository(repoFullName);
             List<FileContent> files = new ArrayList<>();
             
+            log.info("Collecting {} files from branch '{}': {}", type, branch, filePaths);
+            
             for (String filePath : filePaths) {
                 try {
                     // 파일 내용 가져오기
+                    log.debug("Fetching file: {} from branch: {}", filePath, branch);
                     GHContent content = repo.getFileContent(filePath, branch);
                     String fileContent = content.getContent(); // Base64 디코딩된 내용
                     
@@ -159,9 +162,12 @@ public class CodeCollector {
             GHRepository repo = github.getRepository(repoFullName);
             GHPullRequest pr = repo.getPullRequest(prNumber);
             
-            return pr.listFiles().toList().stream()
+            List<String> paths = pr.listFiles().toList().stream()
                     .map(GHPullRequestFileDetail::getFilename)
                     .collect(Collectors.toList());
+            
+            log.info("Changed files in PR #{}: {}", prNumber, paths);
+            return paths;
                     
         } catch (IOException e) {
             log.error("Failed to get changed file paths from PR: {}/{}", repoFullName, prNumber, e);
