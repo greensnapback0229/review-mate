@@ -42,6 +42,7 @@ public class PrReviewService {
 	/**
 	 * PR 리뷰 전체 프로세스 실행
 	 *
+	 * @param repositoryId GitHub Repository ID
 	 * @param repoFullName 저장소 풀네임 (예: owner/repo)
 	 * @param prNumber PR 번호
 	 * @param prTitle PR 제목
@@ -50,9 +51,9 @@ public class PrReviewService {
 	 * @param headBranch Head 브랜치명 (PR 브랜치)
 	 * @return 최종 병합된 리뷰 결과
 	 */
-	public String reviewPullRequest(String repoFullName, int prNumber, String prTitle,
+	public String reviewPullRequest(Long repositoryId, String repoFullName, int prNumber, String prTitle,
 		String prBody, String baseBranch, String headBranch) {
-		log.info("Starting PR review for {}/#{}", repoFullName, prNumber);
+		log.info("Starting PR review for {}/#{} (repositoryId={})", repoFullName, prNumber, repositoryId);
 
 		try {
 			// 1. Feature Registry 초기화 (PR 브랜치에서 읽기)
@@ -69,7 +70,7 @@ public class PrReviewService {
 
 			// Main features 리뷰
 			for (String feature : prContext.getMainFeatures()) {
-				AggregatedReview review = reviewFeature(repoFullName, prNumber, baseBranch,
+				AggregatedReview review = reviewFeature(repositoryId, repoFullName, prNumber, baseBranch,
 					headBranch, feature, prContext, changedFiles);
 				if (review != null) {
 					reviews.add(review);
@@ -78,7 +79,7 @@ public class PrReviewService {
 
 			// Related features 리뷰
 			for (String feature : prContext.getRelatedFeatures()) {
-				AggregatedReview review = reviewFeature(repoFullName, prNumber, baseBranch,
+				AggregatedReview review = reviewFeature(repositoryId, repoFullName, prNumber, baseBranch,
 					headBranch, feature, prContext, changedFiles);
 				if (review != null) {
 					reviews.add(review);
@@ -100,6 +101,7 @@ public class PrReviewService {
 	/**
 	 * 단일 기능에 대한 리뷰 수행
 	 *
+	 * @param repositoryId GitHub Repository ID
 	 * @param repoFullName 저장소 풀네임
 	 * @param prNumber PR 번호
 	 * @param baseBranch Base 브랜치 (현재 사용하지 않음)
@@ -109,13 +111,13 @@ public class PrReviewService {
 	 * @param changedFiles 변경된 파일 목록
 	 * @return 집계된 리뷰 결과
 	 */
-	private AggregatedReview reviewFeature(String repoFullName, int prNumber, String baseBranch,
+	private AggregatedReview reviewFeature(Long repositoryId, String repoFullName, int prNumber, String baseBranch,
 		String headBranch, String feature, PrContext prContext, List<String> changedFiles) {
 		try {
 			log.info("Reviewing feature: {}", feature);
 
 			// 1. Feature 해석
-			ResolvedFeature resolvedFeature = featureResolver.resolve(feature)
+			ResolvedFeature resolvedFeature = featureResolver.resolve(repositoryId, feature)
 				.orElse(null);
 
 			if (resolvedFeature == null) {
@@ -173,7 +175,7 @@ public class PrReviewService {
 			}
 
 			// 8. 리뷰 집계
-			return reviewAggregator.aggregate(feature, reviewResponse);
+			return reviewAggregator.aggregate(repositoryId, feature, reviewResponse);
 
 		} catch (Exception e) {
 			log.error("Failed to review feature {}: {}", feature, e.getMessage(), e);

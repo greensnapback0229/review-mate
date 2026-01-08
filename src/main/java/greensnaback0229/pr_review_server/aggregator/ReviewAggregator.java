@@ -26,12 +26,13 @@ public class ReviewAggregator {
     /**
      * 단일 기능의 리뷰 결과를 집계
      *
+     * @param repositoryId GitHub Repository ID
      * @param feature 기능 이름
      * @param reviewResponse LLM 리뷰 응답
      * @return 집계된 리뷰 결과
      */
-    public AggregatedReview aggregate(String feature, ReviewResponse reviewResponse) {
-        log.info("Aggregating review for feature: {}", feature);
+    public AggregatedReview aggregate(Long repositoryId, String feature, ReviewResponse reviewResponse) {
+        log.info("Aggregating review for feature: {} (repositoryId={})", feature, repositoryId);
         
         AggregatedReview.AggregatedReviewBuilder builder = AggregatedReview.builder()
                 .feature(feature)
@@ -40,7 +41,7 @@ public class ReviewAggregator {
         
         // LLM이 제안한 Feature Memory 업데이트
         if (reviewResponse.getMemorySuggestion() != null) {
-            FeatureMemory updatedMemory = updateMemoryFromSuggestion(feature, reviewResponse.getMemorySuggestion());
+            FeatureMemory updatedMemory = updateMemoryFromSuggestion(repositoryId, feature, reviewResponse.getMemorySuggestion());
             builder.updatedMemory(updatedMemory);
         }
         
@@ -78,13 +79,14 @@ public class ReviewAggregator {
     /**
      * LLM의 제안을 기반으로 Feature Memory 업데이트
      *
+     * @param repositoryId GitHub Repository ID
      * @param feature 기능 이름
      * @param suggestion LLM이 제안한 메모리 업데이트 내용
      * @return 업데이트된 Feature Memory
      */
-    private FeatureMemory updateMemoryFromSuggestion(String feature, MemorySuggestion suggestion) {
+    private FeatureMemory updateMemoryFromSuggestion(Long repositoryId, String feature, MemorySuggestion suggestion) {
         // 기존 메모리 조회
-        FeatureMemory existingMemory = featureMemoryRepository.findByFeature(feature)
+        FeatureMemory existingMemory = featureMemoryRepository.findByFeature(repositoryId, feature)
                 .orElse(null);
         
         // 새 메모리 생성 또는 업데이트
@@ -125,9 +127,9 @@ public class ReviewAggregator {
         }
         
         FeatureMemory updatedMemory = builder.build();
-        featureMemoryRepository.save(updatedMemory);
+        featureMemoryRepository.save(repositoryId, updatedMemory);
         
-        log.info("Updated feature memory for: {} with LLM suggestion", feature);
+        log.info("Updated feature memory for: {} (repositoryId={}) with LLM suggestion", feature, repositoryId);
         return updatedMemory;
     }
 }
