@@ -20,6 +20,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class FeatureResolverTest {
 
+    private static final Long TEST_REPOSITORY_ID = 123456789L;
+
     @Mock
     private FeatureRegistry registry;
 
@@ -57,10 +59,10 @@ class FeatureResolverTest {
     void resolve_Definition과_Memory_모두_있는_경우() {
         // given
         when(registry.getFeature("PAYMENT")).thenReturn(Optional.of(paymentDefinition));
-        when(memoryRepository.findByFeature("PAYMENT")).thenReturn(Optional.of(paymentMemory));
+        when(memoryRepository.findByFeature(TEST_REPOSITORY_ID, "PAYMENT")).thenReturn(Optional.of(paymentMemory));
 
         // when
-        Optional<ResolvedFeature> result = resolver.resolve("PAYMENT");
+        Optional<ResolvedFeature> result = resolver.resolve(TEST_REPOSITORY_ID, "PAYMENT");
 
         // then
         assertTrue(result.isPresent());
@@ -74,10 +76,10 @@ class FeatureResolverTest {
     void resolve_Definition만_있고_Memory_없는_경우() {
         // given
         when(registry.getFeature("PAYMENT")).thenReturn(Optional.of(paymentDefinition));
-        when(memoryRepository.findByFeature("PAYMENT")).thenReturn(Optional.empty());
+        when(memoryRepository.findByFeature(TEST_REPOSITORY_ID, "PAYMENT")).thenReturn(Optional.empty());
 
         // when
-        Optional<ResolvedFeature> result = resolver.resolve("PAYMENT");
+        Optional<ResolvedFeature> result = resolver.resolve(TEST_REPOSITORY_ID, "PAYMENT");
 
         // then
         assertTrue(result.isPresent());
@@ -91,7 +93,7 @@ class FeatureResolverTest {
         when(registry.getFeature("NONEXISTENT")).thenReturn(Optional.empty());
 
         // when
-        Optional<ResolvedFeature> result = resolver.resolve("NONEXISTENT");
+        Optional<ResolvedFeature> result = resolver.resolve(TEST_REPOSITORY_ID, "NONEXISTENT");
 
         // then
         assertTrue(result.isEmpty());
