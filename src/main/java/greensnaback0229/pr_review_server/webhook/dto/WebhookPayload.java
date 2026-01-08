@@ -95,6 +95,11 @@ public class WebhookPayload {
     @AllArgsConstructor
     public static class Repository {
         /**
+         * 저장소 ID
+         */
+        private Long id;
+        
+        /**
          * 저장소 풀네임 (owner/repo)
          */
         @JsonProperty("full_name")

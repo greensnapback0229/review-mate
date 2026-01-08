@@ -25,6 +25,8 @@ import static org.mockito.Mockito.*;
 @DisplayName("ReviewAggregator 테스트")
 class ReviewAggregatorTest {
     
+    private static final Long TEST_REPOSITORY_ID = 123456789L;
+    
     @Mock
     private FeatureMemoryRepository featureMemoryRepository;
     
@@ -47,7 +49,7 @@ class ReviewAggregatorTest {
                 .build();
         
         // when
-        AggregatedReview result = reviewAggregator.aggregate(feature, reviewResponse);
+        AggregatedReview result = reviewAggregator.aggregate(TEST_REPOSITORY_ID, feature, reviewResponse);
         
         // then
         assertThat(result.getFeature()).isEqualTo("PAYMENT");
@@ -55,7 +57,7 @@ class ReviewAggregatorTest {
         assertThat(result.getReviewedAt()).isNotNull();
         assertThat(result.getUpdatedMemory()).isNull();
         
-        verify(featureMemoryRepository, never()).save(any());
+        verify(featureMemoryRepository, never()).save(anyLong(), any());
     }
     
     @Test
@@ -74,10 +76,10 @@ class ReviewAggregatorTest {
                 .memorySuggestion(suggestion)
                 .build();
         
-        when(featureMemoryRepository.findByFeature(feature)).thenReturn(Optional.empty());
+        when(featureMemoryRepository.findByFeature(TEST_REPOSITORY_ID, feature)).thenReturn(Optional.empty());
         
         // when
-        AggregatedReview result = reviewAggregator.aggregate(feature, reviewResponse);
+        AggregatedReview result = reviewAggregator.aggregate(TEST_REPOSITORY_ID, feature, reviewResponse);
         
         // then
         assertThat(result.getUpdatedMemory()).isNotNull();
@@ -86,7 +88,7 @@ class ReviewAggregatorTest {
         assertThat(result.getUpdatedMemory().getKeyPoints()).hasSize(2);
         assertThat(result.getUpdatedMemory().getRelatedFiles()).contains("MoneyUtils.java");
         
-        verify(featureMemoryRepository).save(any(FeatureMemory.class));
+        verify(featureMemoryRepository).save(eq(TEST_REPOSITORY_ID), any(FeatureMemory.class));
     }
     
     @Test
@@ -115,10 +117,10 @@ class ReviewAggregatorTest {
                 .memorySuggestion(suggestion)
                 .build();
         
-        when(featureMemoryRepository.findByFeature(feature)).thenReturn(Optional.of(existingMemory));
+        when(featureMemoryRepository.findByFeature(TEST_REPOSITORY_ID, feature)).thenReturn(Optional.of(existingMemory));
         
         // when
-        AggregatedReview result = reviewAggregator.aggregate(feature, reviewResponse);
+        AggregatedReview result = reviewAggregator.aggregate(TEST_REPOSITORY_ID, feature, reviewResponse);
         
         // then
         FeatureMemory updated = result.getUpdatedMemory();
@@ -128,7 +130,7 @@ class ReviewAggregatorTest {
         assertThat(updated.getRelatedFiles()).hasSize(2)
                 .contains("ExistingFile.java", "NewFile.java");
         
-        verify(featureMemoryRepository).save(any(FeatureMemory.class));
+        verify(featureMemoryRepository).save(eq(TEST_REPOSITORY_ID), any(FeatureMemory.class));
     }
     
     @Test
@@ -155,10 +157,10 @@ class ReviewAggregatorTest {
                 .memorySuggestion(suggestion)
                 .build();
         
-        when(featureMemoryRepository.findByFeature(feature)).thenReturn(Optional.of(existingMemory));
+        when(featureMemoryRepository.findByFeature(TEST_REPOSITORY_ID, feature)).thenReturn(Optional.of(existingMemory));
         
         // when
-        AggregatedReview result = reviewAggregator.aggregate(feature, reviewResponse);
+        AggregatedReview result = reviewAggregator.aggregate(TEST_REPOSITORY_ID, feature, reviewResponse);
         
         // then
         assertThat(result.getUpdatedMemory().getRelatedFiles()).hasSize(3)

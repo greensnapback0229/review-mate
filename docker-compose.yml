@@ -1,6 +1,23 @@
 version: '3.8'
 
 services:
+  mysql:
+    image: mysql:8.0
+    container_name: pr-review-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   pr-review-server:
     image: ${DOCKER_IMAGE}
     container_name: pr-review-server
@@ -11,4 +28,10 @@ services:
     volumes:
       # Private Key 마운트
       - ./secrets:/app/secrets:ro
+    depends_on:
+      mysql:
+        condition: service_healthy
     restart: unless-stopped
+
+volumes:
+  mysql_data:

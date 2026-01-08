@@ -26,10 +26,11 @@ public class FeatureResolver {
      * 기능명으로 ResolvedFeature 조회
      * Registry의 정적 정보 + Memory의 동적 지식 조합
      * 
+     * @param repositoryId GitHub Repository ID
      * @param featureName 기능 식별자
      * @return ResolvedFeature Optional
      */
-    public Optional<ResolvedFeature> resolve(String featureName) {
+    public Optional<ResolvedFeature> resolve(Long repositoryId, String featureName) {
         // Registry에서 정적 명세 조회
         Optional<FeatureDefinition> definition = registry.getFeature(featureName);
         if (definition.isEmpty()) {
@@ -37,7 +38,7 @@ public class FeatureResolver {
         }
         
         // Memory에서 동적 지식 조회
-        Optional<FeatureMemory> memory = memoryRepository.findByFeature(featureName);
+        Optional<FeatureMemory> memory = memoryRepository.findByFeature(repositoryId, featureName);
         
         // 조합하여 ResolvedFeature 생성
         ResolvedFeature resolved = ResolvedFeature.builder()

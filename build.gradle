@@ -28,6 +28,10 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'com.anthropic:anthropic-java:2.11.1'
     
+    // JPA and MySQL
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    runtimeOnly 'com.mysql:mysql-connector-j'
+    
     // GitHub API
     implementation 'org.kohsuke:github-api:1.319'
     

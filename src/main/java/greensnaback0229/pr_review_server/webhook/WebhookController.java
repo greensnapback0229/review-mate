@@ -58,6 +58,7 @@ public class WebhookController {
             WebhookPayload.PullRequest pr = payload.getPullRequest();
             WebhookPayload.Repository repo = payload.getRepository();
             
+            Long repositoryId = repo.getId();
             String repoFullName = repo.getFullName();
             int prNumber = pr.getNumber();
             String prTitle = pr.getTitle();
@@ -65,11 +66,11 @@ public class WebhookController {
             String baseBranch = pr.getBase().getRef();
             String headBranch = pr.getHead().getRef();
             
-            log.info("Processing PR: {}/#{} - {}", repoFullName, prNumber, prTitle);
+            log.info("Processing PR: {}/#{} - {} (repositoryId={})", repoFullName, prNumber, prTitle, repositoryId);
             
             // 리뷰 수행
             String review = prReviewService.reviewPullRequest(
-                    repoFullName, prNumber, prTitle, prBody, baseBranch, headBranch);
+                    repositoryId, repoFullName, prNumber, prTitle, prBody, baseBranch, headBranch);
             
             // GitHub에 코멘트 작성
             try {
