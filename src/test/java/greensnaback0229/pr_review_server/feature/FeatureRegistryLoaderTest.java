@@ -1,9 +1,9 @@
 package greensnaback0229.pr_review_server.feature;
 
 import greensnaback0229.pr_review_server.feature.dto.FeatureDefinition;
+import greensnaback0229.pr_review_server.github.GitHubAppAuthenticator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.kohsuke.github.GitHub;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -19,8 +19,8 @@ class FeatureRegistryLoaderTest {
 
     @BeforeEach
     void setUp() {
-        GitHub github = mock(GitHub.class);
-        loader = new FeatureRegistryLoader(github);
+        GitHubAppAuthenticator authenticator = mock(GitHubAppAuthenticator.class);
+        loader = new FeatureRegistryLoader(authenticator);
     }
 
     @Test
