@@ -3,11 +3,13 @@ package greensnaback0229.pr_review_server.feature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import greensnaback0229.pr_review_server.feature.dto.FeatureDefinition;
+import greensnaback0229.pr_review_server.github.GitHubAppAuthenticator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.kohsuke.github.GHContent;
 import org.kohsuke.github.GHRepository;
 import org.kohsuke.github.GitHub;
+import org.kohsuke.github.GitHubBuilder;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -25,13 +27,13 @@ public class FeatureRegistryLoader {
     
     private static final String REGISTRY_PATH = ".github/pr-review/feature-registry.yml";
     private final ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory());
-    private final GitHub github;
+    private final GitHubAppAuthenticator authenticator;
 
     /**
      * GitHub 저장소에서 feature-registry.yml 파일을 읽어와 FeatureDefinition Map으로 변환
      * 
      * @param repoFullName 저장소 전체 이름 (예: "owner/repo")
-     * @param githubToken GitHub API 토큰 (deprecated - GitHub Bean 사용)
+     * @param githubToken GitHub API 토큰 (deprecated - 사용 안 함)
      * @return 기능명을 키로 하는 FeatureDefinition Map
      * @throws IOException GitHub API 호출 또는 YAML 파싱 실패 시
      */
@@ -43,7 +45,7 @@ public class FeatureRegistryLoader {
      * GitHub 저장소의 특정 브랜치에서 feature-registry.yml 파일을 읽어와 FeatureDefinition Map으로 변환
      * 
      * @param repoFullName 저장소 전체 이름 (예: "owner/repo")
-     * @param githubToken GitHub API 토큰 (deprecated - GitHub Bean 사용)
+     * @param githubToken GitHub API 토큰 (deprecated - 사용 안 함)
      * @param branch 브랜치명 (null이면 기본 브랜치)
      * @return 기능명을 키로 하는 FeatureDefinition Map
      * @throws IOException GitHub API 호출 또는 YAML 파싱 실패 시
@@ -52,6 +54,12 @@ public class FeatureRegistryLoader {
         log.info("Loading feature registry from repository: {} (branch: {})", repoFullName, branch != null ? branch : "default");
         
         try {
+            // 매번 최신 토큰으로 GitHub 클라이언트 생성
+            String installationToken = authenticator.getInstallationToken();
+            GitHub github = new GitHubBuilder()
+                    .withAppInstallationToken(installationToken)
+                    .build();
+            
             GHRepository repository = github.getRepository(repoFullName);
             log.info("Successfully got repository: {}", repository.getFullName());
             
