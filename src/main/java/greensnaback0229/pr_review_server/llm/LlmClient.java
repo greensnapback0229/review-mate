@@ -6,13 +6,18 @@ import com.anthropic.models.messages.Message;
 import com.anthropic.models.messages.MessageCreateParams;
 import com.anthropic.models.messages.MessageParam;
 import com.anthropic.models.messages.Model;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import greensnaback0229.pr_review_server.llm.dto.ReviewResponse;
+import greensnaback0229.pr_review_server.llm.dto.MemorySuggestion;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * LLM Client
@@ -23,11 +28,13 @@ import java.util.List;
 public class LlmClient {
     
     private final AnthropicClient client;
+    private final ObjectMapper objectMapper;
     
-    public LlmClient(@Value("${anthropic.api.key}") String apiKey) {
+    public LlmClient(@Value("${anthropic.api.key}") String apiKey, ObjectMapper objectMapper) {
         this.client = AnthropicOkHttpClient.builder()
                 .apiKey(apiKey)
                 .build();
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -89,14 +96,10 @@ public class LlmClient {
             
             // 응답 파싱
             String content = extractContent(response);
+            log.info("LLM Response: {}", content);
             
-            // TODO: 응답에서 needMoreContext, requestedFiles, reason 파싱
-            return ReviewResponse.builder()
-                    .review(content)
-                    .needMoreContext(false)
-                    .requestedFiles(List.of())
-                    .reason(null)
-                    .build();
+            // JSON 추출 및 파싱
+            return parseResponse(content);
             
         } catch (Exception e) {
             log.error("LLM request failed", e);
@@ -116,5 +119,74 @@ public class LlmClient {
                 .map(textBlock -> textBlock.text())
                 .findFirst()
                 .orElse("");
+    }
+
+    /**
+     * LLM 응답에서 JSON을 추출하고 파싱
+     * 
+     * @param content LLM 응답 텍스트
+     * @return ReviewResponse
+     */
+    private ReviewResponse parseResponse(String content) {
+        try {
+            // JSON 블록 추출 (```json ... ``` 형식)
+            Pattern jsonPattern = Pattern.compile("```json\\s*\\n(.*?)\\n```", Pattern.DOTALL);
+            Matcher matcher = jsonPattern.matcher(content);
+            
+            if (matcher.find()) {
+                String jsonStr = matcher.group(1).trim();
+                log.info("Extracted JSON: {}", jsonStr);
+                
+                // JSON 파싱
+                Map<String, Object> jsonMap = objectMapper.readValue(jsonStr, Map.class);
+                
+                boolean needMoreContext = (Boolean) jsonMap.getOrDefault("needMoreContext", false);
+                
+                if (needMoreContext) {
+                    // 추가 파일 요청
+                    List<String> requestedFiles = (List<String>) jsonMap.get("requestedFiles");
+                    String reason = (String) jsonMap.get("reason");
+                    
+                    return ReviewResponse.builder()
+                            .needMoreContext(true)
+                            .requestedFiles(requestedFiles != null ? requestedFiles : List.of())
+                            .reason(reason)
+                            .build();
+                } else {
+                    // 최종 리뷰
+                    String review = (String) jsonMap.get("review");
+                    Map<String, Object> memorySuggestionMap = (Map<String, Object>) jsonMap.get("memorySuggestion");
+                    
+                    MemorySuggestion memorySuggestion = null;
+                    if (memorySuggestionMap != null) {
+                        memorySuggestion = MemorySuggestion.builder()
+                                .summary((String) memorySuggestionMap.get("summary"))
+                                .keyPoints((List<String>) memorySuggestionMap.get("keyPoints"))
+                                .relatedFiles((List<String>) memorySuggestionMap.get("relatedFiles"))
+                                .build();
+                    }
+                    
+                    return ReviewResponse.builder()
+                            .review(review != null ? review : content)
+                            .needMoreContext(false)
+                            .memorySuggestion(memorySuggestion)
+                            .build();
+                }
+            } else {
+                // JSON이 없는 경우 전체 텍스트를 리뷰로 사용
+                log.warn("No JSON block found in LLM response, using entire content as review");
+                return ReviewResponse.builder()
+                        .review(content)
+                        .needMoreContext(false)
+                        .build();
+            }
+        } catch (Exception e) {
+            log.error("Failed to parse LLM response", e);
+            // 파싱 실패 시 전체 텍스트를 리뷰로 사용
+            return ReviewResponse.builder()
+                    .review(content)
+                    .needMoreContext(false)
+                    .build();
+        }
     }
 }
