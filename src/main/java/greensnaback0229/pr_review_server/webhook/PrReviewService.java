@@ -11,7 +11,7 @@ import greensnaback0229.pr_review_server.aggregator.dto.AggregatedReview;
 import greensnaback0229.pr_review_server.collector.CodeCollector;
 import greensnaback0229.pr_review_server.collector.dto.CollectedCode;
 import greensnaback0229.pr_review_server.collector.dto.FileContent;
-import greensnaback0229.pr_review_server.feature.FeatureRegistry;
+import greensnaback0229.pr_review_server.feature.FeatureRegistryLoader;
 import greensnaback0229.pr_review_server.feature.FeatureResolver;
 import greensnaback0229.pr_review_server.feature.dto.FeatureDefinition;
 import greensnaback0229.pr_review_server.feature.dto.ResolvedFeature;
@@ -32,7 +32,7 @@ import lombok.extern.slf4j.Slf4j;
 public class PrReviewService {
 
 	private final PrParser prParser;
-	private final FeatureRegistry featureRegistry;
+	private final FeatureRegistryLoader featureRegistryLoader;
 	private final FeatureResolver featureResolver;
 	private final CodeCollector codeCollector;
 	private final PromptBuilder promptBuilder;
@@ -56,8 +56,10 @@ public class PrReviewService {
 		log.info("Starting PR review for {}/#{} (repositoryId={})", repoFullName, prNumber, repositoryId);
 
 		try {
-			// 1. Feature Registry 초기화 (PR 브랜치에서 읽기)
-			featureRegistry.initialize(repoFullName, null, headBranch);
+			// 1. Feature Registry 로드 (PR 브랜치에서 읽기)
+			Map<String, FeatureDefinition> featureRegistry = 
+				featureRegistryLoader.loadFromRepository(repoFullName, null, headBranch);
+			log.info("Loaded {} features from registry", featureRegistry.size());
 
 			// 2. PR 파싱
 			List<String> changedFiles = codeCollector.getChangedFilePaths(repoFullName, prNumber);
@@ -71,7 +73,7 @@ public class PrReviewService {
 			// Main features 리뷰
 			for (String feature : prContext.getMainFeatures()) {
 				AggregatedReview review = reviewFeature(repositoryId, repoFullName, prNumber, baseBranch,
-					headBranch, feature, prContext, changedFiles);
+					headBranch, feature, prContext, changedFiles, featureRegistry);
 				if (review != null) {
 					reviews.add(review);
 				}
@@ -80,7 +82,7 @@ public class PrReviewService {
 			// Related features 리뷰
 			for (String feature : prContext.getRelatedFeatures()) {
 				AggregatedReview review = reviewFeature(repositoryId, repoFullName, prNumber, baseBranch,
-					headBranch, feature, prContext, changedFiles);
+					headBranch, feature, prContext, changedFiles, featureRegistry);
 				if (review != null) {
 					reviews.add(review);
 				}
@@ -109,31 +111,39 @@ public class PrReviewService {
 	 * @param feature 기능 이름
 	 * @param prContext PR 컨텍스트
 	 * @param changedFiles 변경된 파일 목록
+	 * @param featureRegistry 기능 정의 Map
 	 * @return 집계된 리뷰 결과
 	 */
 	private AggregatedReview reviewFeature(Long repositoryId, String repoFullName, int prNumber, String baseBranch,
-		String headBranch, String feature, PrContext prContext, List<String> changedFiles) {
+		String headBranch, String feature, PrContext prContext, List<String> changedFiles,
+		Map<String, FeatureDefinition> featureRegistry) {
 		try {
 			log.info("Reviewing feature: {}", feature);
 
-			// 1. Feature 해석
-			ResolvedFeature resolvedFeature = featureResolver.resolve(repositoryId, feature)
-				.orElse(null);
-
-			if (resolvedFeature == null) {
+			// 1. Feature 정의 조회
+			FeatureDefinition definition = featureRegistry.get(feature);
+			if (definition == null) {
 				log.warn("Feature not found in registry: {}", feature);
 				return null;
 			}
 
-			// 2. 관련 파일 필터링
-			List<String> filteredFiles = featureResolver.filterRelatedFiles(feature, changedFiles);
+			// 2. Feature Memory 조회
+			ResolvedFeature resolvedFeature = featureResolver.resolve(repositoryId, feature, definition)
+				.orElse(null);
+
+			if (resolvedFeature == null) {
+				log.warn("Failed to resolve feature: {}", feature);
+				return null;
+			}
+
+			// 3. 관련 파일 필터링
+			List<String> filteredFiles = featureResolver.filterRelatedFiles(definition, changedFiles);
 			if (filteredFiles.isEmpty()) {
 				log.warn("No related files found for feature: {}", feature);
 				return null;
 			}
 
-			// 3. 코드 수집 (PR의 head 브랜치에서 수집)
-			FeatureDefinition definition = resolvedFeature.getDefinition();
+			// 4. 코드 수집 (PR의 head 브랜치에서 수집)
 			List<String> coreFilePaths = definition.getCoreFiles();
 			
 			log.info("Core files from feature registry: {}", coreFilePaths);
@@ -142,7 +152,7 @@ public class PrReviewService {
 			CollectedCode collectedCode = codeCollector.collectAll(
 				repoFullName, prNumber, headBranch, filteredFiles, coreFilePaths);
 
-			// 4. CollectedCode를 Map으로 변환
+			// 5. CollectedCode를 Map으로 변환
 			Map<String, String> changedFilesMap = collectedCode.getChangedFiles().stream()
 				.collect(java.util.stream.Collectors.toMap(
 					FileContent::getPath,
@@ -155,15 +165,15 @@ public class PrReviewService {
 					FileContent::getContent
 				));
 
-			// 5. 프롬프트 생성
+			// 6. 프롬프트 생성
 			String systemPrompt = promptBuilder.buildSystemPrompt();
 			String initialPrompt = promptBuilder.buildInitialPrompt(
 				resolvedFeature, changedFilesMap, coreFilesMap);
 
-			// 6. LLM 리뷰 요청
+			// 7. LLM 리뷰 요청
 			ReviewResponse reviewResponse = llmClient.startReview(systemPrompt, initialPrompt);
 
-			// 7. 추가 파일 요청 처리 (필요시)
+			// 8. 추가 파일 요청 처리 (필요시)
 			while (reviewResponse.isNeedMoreContext()) {
 				log.info("LLM requested more context: {}", reviewResponse.getRequestedFiles());
 
@@ -174,7 +184,7 @@ public class PrReviewService {
 				break;
 			}
 
-			// 8. 리뷰 집계
+			// 9. 리뷰 집계
 			return reviewAggregator.aggregate(repositoryId, feature, reviewResponse);
 
 		} catch (Exception e) {

@@ -23,9 +23,6 @@ class FeatureResolverTest {
     private static final Long TEST_REPOSITORY_ID = 123456789L;
 
     @Mock
-    private FeatureRegistry registry;
-
-    @Mock
     private FeatureMemoryRepository memoryRepository;
 
     @InjectMocks
@@ -58,11 +55,10 @@ class FeatureResolverTest {
     @Test
     void resolve_Definition과_Memory_모두_있는_경우() {
         // given
-        when(registry.getFeature("PAYMENT")).thenReturn(Optional.of(paymentDefinition));
         when(memoryRepository.findByFeature(TEST_REPOSITORY_ID, "PAYMENT")).thenReturn(Optional.of(paymentMemory));
 
         // when
-        Optional<ResolvedFeature> result = resolver.resolve(TEST_REPOSITORY_ID, "PAYMENT");
+        Optional<ResolvedFeature> result = resolver.resolve(TEST_REPOSITORY_ID, "PAYMENT", paymentDefinition);
 
         // then
         assertTrue(result.isPresent());
@@ -75,11 +71,10 @@ class FeatureResolverTest {
     @Test
     void resolve_Definition만_있고_Memory_없는_경우() {
         // given
-        when(registry.getFeature("PAYMENT")).thenReturn(Optional.of(paymentDefinition));
         when(memoryRepository.findByFeature(TEST_REPOSITORY_ID, "PAYMENT")).thenReturn(Optional.empty());
 
         // when
-        Optional<ResolvedFeature> result = resolver.resolve(TEST_REPOSITORY_ID, "PAYMENT");
+        Optional<ResolvedFeature> result = resolver.resolve(TEST_REPOSITORY_ID, "PAYMENT", paymentDefinition);
 
         // then
         assertTrue(result.isPresent());
@@ -88,21 +83,8 @@ class FeatureResolverTest {
     }
 
     @Test
-    void resolve_Definition이_없는_경우() {
-        // given
-        when(registry.getFeature("NONEXISTENT")).thenReturn(Optional.empty());
-
-        // when
-        Optional<ResolvedFeature> result = resolver.resolve(TEST_REPOSITORY_ID, "NONEXISTENT");
-
-        // then
-        assertTrue(result.isEmpty());
-    }
-
-    @Test
     void filterRelatedFiles_경로_일치하는_파일_필터링() {
         // given
-        when(registry.getFeature("PAYMENT")).thenReturn(Optional.of(paymentDefinition));
         List<String> changedFiles = List.of(
                 "src/main/java/com/app/payment/PaymentService.java",
                 "src/main/java/com/app/payment/PaymentDto.java",
@@ -112,7 +94,7 @@ class FeatureResolverTest {
         );
 
         // when
-        List<String> result = resolver.filterRelatedFiles("PAYMENT", changedFiles);
+        List<String> result = resolver.filterRelatedFiles(paymentDefinition, changedFiles);
 
         // then
         assertEquals(3, result.size());
@@ -125,55 +107,13 @@ class FeatureResolverTest {
     @Test
     void filterRelatedFiles_일치하는_파일_없음() {
         // given
-        when(registry.getFeature("PAYMENT")).thenReturn(Optional.of(paymentDefinition));
         List<String> changedFiles = List.of(
                 "src/main/java/com/app/auth/AuthService.java",
                 "src/main/java/com/app/common/Utils.java"
         );
 
         // when
-        List<String> result = resolver.filterRelatedFiles("PAYMENT", changedFiles);
-
-        // then
-        assertTrue(result.isEmpty());
-    }
-
-    @Test
-    void filterRelatedFiles_존재하지_않는_기능() {
-        // given
-        when(registry.getFeature("NONEXISTENT")).thenReturn(Optional.empty());
-        List<String> changedFiles = List.of(
-                "src/main/java/com/app/payment/PaymentService.java"
-        );
-
-        // when
-        List<String> result = resolver.filterRelatedFiles("NONEXISTENT", changedFiles);
-
-        // then
-        assertTrue(result.isEmpty());
-    }
-
-    @Test
-    void getCoreFiles_핵심_파일_조회() {
-        // given
-        when(registry.getFeature("PAYMENT")).thenReturn(Optional.of(paymentDefinition));
-
-        // when
-        List<String> result = resolver.getCoreFiles("PAYMENT");
-
-        // then
-        assertEquals(2, result.size());
-        assertTrue(result.contains("PaymentService.java"));
-        assertTrue(result.contains("PaymentValidator.java"));
-    }
-
-    @Test
-    void getCoreFiles_존재하지_않는_기능() {
-        // given
-        when(registry.getFeature("NONEXISTENT")).thenReturn(Optional.empty());
-
-        // when
-        List<String> result = resolver.getCoreFiles("NONEXISTENT");
+        List<String> result = resolver.filterRelatedFiles(paymentDefinition, changedFiles);
 
         // then
         assertTrue(result.isEmpty());
