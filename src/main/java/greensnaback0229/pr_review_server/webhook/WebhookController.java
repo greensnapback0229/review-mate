@@ -1,11 +1,16 @@
 package greensnaback0229.pr_review_server.webhook;
 
+import greensnaback0229.pr_review_server.aggregator.dto.AggregatedReview;
+import greensnaback0229.pr_review_server.github.GitHubReviewClient;
+import greensnaback0229.pr_review_server.llm.dto.InlineComment;
 import greensnaback0229.pr_review_server.webhook.dto.WebhookPayload;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -19,7 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class WebhookController {
     
     private final PrReviewService prReviewService;
-    private final greensnaback0229.pr_review_server.github.GitHubCommentService gitHubCommentService;
+    private final GitHubReviewClient gitHubReviewClient;
     
     /**
      * 처리된 webhook delivery ID를 추적하는 Set (중복 이벤트 방지)
@@ -69,16 +74,21 @@ public class WebhookController {
             log.info("Processing PR: {}/#{} - {} (repositoryId={})", repoFullName, prNumber, prTitle, repositoryId);
             
             // 리뷰 수행
-            String review = prReviewService.reviewPullRequest(
+            List<AggregatedReview> reviews = prReviewService.reviewPullRequest(
                     repositoryId, repoFullName, prNumber, prTitle, prBody, baseBranch, headBranch);
             
-            // GitHub에 코멘트 작성
+            if (reviews.isEmpty()) {
+                log.warn("No reviews generated for {}/#{}", repoFullName, prNumber);
+                return ResponseEntity.ok("No reviews generated");
+            }
+            
+            // GitHub에 리뷰 작성
             try {
-                gitHubCommentService.postReviewComment(repoFullName, prNumber, review);
-                log.info("Review comment posted successfully for {}/#{}", repoFullName, prNumber);
+                postReviews(repoFullName, prNumber, reviews);
+                log.info("Reviews posted successfully for {}/#{}", repoFullName, prNumber);
             } catch (Exception e) {
-                log.error("Failed to post comment, but review completed: {}", e.getMessage());
-                // 코멘트 작성 실패해도 리뷰는 완료된 것으로 처리
+                log.error("Failed to post reviews: {}", e.getMessage(), e);
+                // 리뷰 작성 실패해도 처리는 완료된 것으로 간주
             }
             
             log.info("Review completed for {}/#{}", repoFullName, prNumber);
@@ -89,6 +99,45 @@ public class WebhookController {
             log.error("Failed to process webhook: {}", e.getMessage(), e);
             return ResponseEntity.internalServerError()
                     .body("Failed to process webhook: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * 리뷰 결과를 GitHub에 작성
+     * 
+     * @param repoFullName 저장소 전체 이름
+     * @param prNumber PR 번호
+     * @param reviews 기능별 리뷰 결과 목록
+     */
+    private void postReviews(String repoFullName, int prNumber, List<AggregatedReview> reviews) {
+        // 전체 리뷰 병합
+        StringBuilder generalReview = new StringBuilder();
+        generalReview.append("# 전체 리뷰 결과\n\n");
+        
+        // 모든 inline comments 수집
+        List<InlineComment> allInlineComments = new ArrayList<>();
+        
+        for (AggregatedReview review : reviews) {
+            // 기능별 general review 병합
+            generalReview.append("## ").append(review.getFeature()).append(" 기능\n\n");
+            if (review.getReview() != null && !review.getReview().isEmpty()) {
+                generalReview.append(review.getReview()).append("\n\n");
+            }
+            generalReview.append("---\n\n");
+            
+            // Inline comments 수집
+            if (review.getInlineComments() != null && !review.getInlineComments().isEmpty()) {
+                allInlineComments.addAll(review.getInlineComments());
+            }
+        }
+        
+        // GitHub Review API로 작성
+        if (allInlineComments.isEmpty()) {
+            // Inline comments가 없으면 단순 코멘트
+            gitHubReviewClient.createComment(repoFullName, prNumber, generalReview.toString());
+        } else {
+            // Inline comments가 있으면 Review로 작성
+            gitHubReviewClient.createReview(repoFullName, prNumber, generalReview.toString(), allInlineComments);
         }
     }
     

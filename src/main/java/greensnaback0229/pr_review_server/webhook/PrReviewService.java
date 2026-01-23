@@ -49,15 +49,15 @@ public class PrReviewService {
 	 * @param prBody PR 본문
 	 * @param baseBranch Base 브랜치명
 	 * @param headBranch Head 브랜치명 (PR 브랜치)
-	 * @return 최종 병합된 리뷰 결과
+	 * @return 기능별 집계된 리뷰 결과 목록
 	 */
-	public String reviewPullRequest(Long repositoryId, String repoFullName, int prNumber, String prTitle,
+	public List<AggregatedReview> reviewPullRequest(Long repositoryId, String repoFullName, int prNumber, String prTitle,
 		String prBody, String baseBranch, String headBranch) {
 		log.info("Starting PR review for {}/#{} (repositoryId={})", repoFullName, prNumber, repositoryId);
 
 		try {
 			// 1. Feature Registry 로드 (PR 브랜치에서 읽기)
-			Map<String, FeatureDefinition> featureRegistry = 
+			Map<String, FeatureDefinition> featureRegistry =
 				featureRegistryLoader.loadFromRepository(repoFullName, null, headBranch);
 			log.info("Loaded {} features from registry", featureRegistry.size());
 
@@ -88,15 +88,13 @@ public class PrReviewService {
 				}
 			}
 
-			// 4. 리뷰 결과 병합
-			String finalReview = reviewAggregator.mergeReviews(reviews);
-			log.info("Completed PR review for {}/#{}", repoFullName, prNumber);
+			log.info("Completed PR review for {}/#{} with {} feature reviews", repoFullName, prNumber, reviews.size());
 
-			return finalReview;
+			return reviews;
 
 		} catch (Exception e) {
 			log.error("Failed to review PR {}/{}: {}", repoFullName, prNumber, e.getMessage(), e);
-			return "❌ 리뷰 중 오류가 발생했습니다: " + e.getMessage();
+			return List.of(); // 빈 리스트 반환
 		}
 	}
 
@@ -145,7 +143,7 @@ public class PrReviewService {
 
 			// 4. 코드 수집 (PR의 head 브랜치에서 수집)
 			List<String> coreFilePaths = definition.getCoreFiles();
-			
+
 			log.info("Core files from feature registry: {}", coreFilePaths);
 			log.info("Filtered changed files: {}", filteredFiles);
 
