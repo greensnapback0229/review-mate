@@ -1,12 +1,14 @@
 package greensnaback0229.pr_review_server.aggregator.dto;
 
 import greensnaback0229.pr_review_server.feature.dto.FeatureMemory;
+import greensnaback0229.pr_review_server.llm.dto.InlineComment;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 집계된 리뷰 결과
@@ -23,9 +25,14 @@ public class AggregatedReview {
     private String feature;
     
     /**
-     * 병합된 리뷰 내용
+     * 전반적인 리뷰 내용
      */
     private String review;
+    
+    /**
+     * 특정 라인에 대한 코멘트 목록
+     */
+    private List<InlineComment> inlineComments;
     
     /**
      * 리뷰 수행 시각

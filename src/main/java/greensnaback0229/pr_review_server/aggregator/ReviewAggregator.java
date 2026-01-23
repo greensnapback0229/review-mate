@@ -36,7 +36,8 @@ public class ReviewAggregator {
         
         AggregatedReview.AggregatedReviewBuilder builder = AggregatedReview.builder()
                 .feature(feature)
-                .review(reviewResponse.getReview())
+                .review(reviewResponse.getGeneralReview())
+                .inlineComments(reviewResponse.getInlineComments())
                 .reviewedAt(LocalDateTime.now());
         
         // LLM이 제안한 Feature Memory 업데이트

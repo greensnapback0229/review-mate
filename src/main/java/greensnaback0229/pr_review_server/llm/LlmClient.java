@@ -9,6 +9,7 @@ import com.anthropic.models.messages.Model;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import greensnaback0229.pr_review_server.llm.dto.ReviewResponse;
 import greensnaback0229.pr_review_server.llm.dto.MemorySuggestion;
+import greensnaback0229.pr_review_server.llm.dto.InlineComment;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -154,9 +155,24 @@ public class LlmClient {
                             .build();
                 } else {
                     // 최종 리뷰
-                    String review = (String) jsonMap.get("review");
-                    Map<String, Object> memorySuggestionMap = (Map<String, Object>) jsonMap.get("memorySuggestion");
+                    String generalReview = (String) jsonMap.get("generalReview");
                     
+                    // Inline Comments 파싱
+                    List<InlineComment> inlineComments = new ArrayList<>();
+                    List<Map<String, Object>> inlineCommentsMap = (List<Map<String, Object>>) jsonMap.get("inlineComments");
+                    if (inlineCommentsMap != null) {
+                        for (Map<String, Object> commentMap : inlineCommentsMap) {
+                            InlineComment comment = InlineComment.builder()
+                                    .path((String) commentMap.get("path"))
+                                    .line(((Number) commentMap.get("line")).intValue())
+                                    .body((String) commentMap.get("body"))
+                                    .build();
+                            inlineComments.add(comment);
+                        }
+                    }
+                    
+                    // Memory Suggestion 파싱
+                    Map<String, Object> memorySuggestionMap = (Map<String, Object>) jsonMap.get("memorySuggestion");
                     MemorySuggestion memorySuggestion = null;
                     if (memorySuggestionMap != null) {
                         memorySuggestion = MemorySuggestion.builder()
@@ -167,7 +183,8 @@ public class LlmClient {
                     }
                     
                     return ReviewResponse.builder()
-                            .review(review != null ? review : content)
+                            .generalReview(generalReview != null ? generalReview : content)
+                            .inlineComments(inlineComments)
                             .needMoreContext(false)
                             .memorySuggestion(memorySuggestion)
                             .build();
@@ -176,7 +193,8 @@ public class LlmClient {
                 // JSON이 없는 경우 전체 텍스트를 리뷰로 사용
                 log.warn("No JSON block found in LLM response, using entire content as review");
                 return ReviewResponse.builder()
-                        .review(content)
+                        .generalReview(content)
+                        .inlineComments(List.of())
                         .needMoreContext(false)
                         .build();
             }
@@ -184,7 +202,8 @@ public class LlmClient {
             log.error("Failed to parse LLM response", e);
             // 파싱 실패 시 전체 텍스트를 리뷰로 사용
             return ReviewResponse.builder()
-                    .review(content)
+                    .generalReview(content)
+                    .inlineComments(List.of())
                     .needMoreContext(false)
                     .build();
         }
