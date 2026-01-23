@@ -44,7 +44,8 @@ class ReviewAggregatorTest {
         // given
         String feature = "PAYMENT";
         ReviewResponse reviewResponse = ReviewResponse.builder()
-                .review("코드 리뷰 내용")
+                .generalReview("코드 리뷰 내용")
+                .inlineComments(List.of())
                 .memorySuggestion(null)
                 .build();
         
@@ -54,6 +55,7 @@ class ReviewAggregatorTest {
         // then
         assertThat(result.getFeature()).isEqualTo("PAYMENT");
         assertThat(result.getReview()).isEqualTo("코드 리뷰 내용");
+        assertThat(result.getInlineComments()).isEmpty();
         assertThat(result.getReviewedAt()).isNotNull();
         assertThat(result.getUpdatedMemory()).isNull();
         
@@ -72,7 +74,8 @@ class ReviewAggregatorTest {
                 .build();
         
         ReviewResponse reviewResponse = ReviewResponse.builder()
-                .review("리뷰 내용")
+                .generalReview("리뷰 내용")
+                .inlineComments(List.of())
                 .memorySuggestion(suggestion)
                 .build();
         
@@ -113,7 +116,8 @@ class ReviewAggregatorTest {
                 .build();
         
         ReviewResponse reviewResponse = ReviewResponse.builder()
-                .review("리뷰 내용")
+                .generalReview("리뷰 내용")
+                .inlineComments(List.of())
                 .memorySuggestion(suggestion)
                 .build();
         
@@ -153,7 +157,8 @@ class ReviewAggregatorTest {
                 .build();
         
         ReviewResponse reviewResponse = ReviewResponse.builder()
-                .review("리뷰")
+                .generalReview("리뷰")
+                .inlineComments(List.of())
                 .memorySuggestion(suggestion)
                 .build();
         

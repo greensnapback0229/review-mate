@@ -132,12 +132,17 @@ public class WebhookController {
         }
         
         // GitHub Review API로 작성
-        if (allInlineComments.isEmpty()) {
-            // Inline comments가 없으면 단순 코멘트
-            gitHubReviewClient.createComment(repoFullName, prNumber, generalReview.toString());
-        } else {
-            // Inline comments가 있으면 Review로 작성
-            gitHubReviewClient.createReview(repoFullName, prNumber, generalReview.toString(), allInlineComments);
+        try {
+            if (allInlineComments.isEmpty()) {
+                // Inline comments가 없으면 단순 코멘트
+                gitHubReviewClient.createSimpleComment(repoFullName, prNumber, generalReview.toString());
+            } else {
+                // Inline comments가 있으면 Review로 작성
+                gitHubReviewClient.createReview(repoFullName, prNumber, generalReview.toString(), allInlineComments);
+            }
+        } catch (Exception e) {
+            log.error("Failed to post review to GitHub: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to post review to GitHub", e);
         }
     }
     
