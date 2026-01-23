@@ -112,7 +112,7 @@ public class WebhookController {
     private void postReviews(String repoFullName, int prNumber, List<AggregatedReview> reviews) {
         // 전체 리뷰 병합
         StringBuilder generalReview = new StringBuilder();
-        generalReview.append("# 전체 리뷰 결과\n\n");
+        generalReview.append("# 🔍 전체 리뷰 결과\n\n");
         
         // 모든 inline comments 수집
         List<InlineComment> allInlineComments = new ArrayList<>();
@@ -136,9 +136,12 @@ public class WebhookController {
             if (allInlineComments.isEmpty()) {
                 // Inline comments가 없으면 단순 코멘트
                 gitHubReviewClient.createSimpleComment(repoFullName, prNumber, generalReview.toString());
+                log.info("Posted review as simple comment for {}/#{}", repoFullName, prNumber);
             } else {
                 // Inline comments가 있으면 Review로 작성
                 gitHubReviewClient.createReview(repoFullName, prNumber, generalReview.toString(), allInlineComments);
+                log.info("Posted review with {} inline comments for {}/#{}", 
+                        allInlineComments.size(), repoFullName, prNumber);
             }
         } catch (Exception e) {
             log.error("Failed to post review to GitHub: {}", e.getMessage(), e);
