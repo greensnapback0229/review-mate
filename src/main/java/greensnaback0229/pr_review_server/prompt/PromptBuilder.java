@@ -32,6 +32,7 @@ public class PromptBuilder {
                 1. 구체적이고 실행 가능한 피드백 제공
                 2. 긍정적인 부분도 언급
                 3. 우선순위 명시 (Critical, Major, Minor)
+                4. 특정 코드 라인 지적 시 반드시 파일 경로와 라인 번호 명시
                 
                 ## 응답 형식
                 리뷰를 완료한 후 반드시 다음 형식으로 응답하세요:
@@ -49,7 +50,14 @@ public class PromptBuilder {
                 ```json
                 {
                   "needMoreContext": false,
-                  "review": "리뷰 내용 (마크다운 형식)",
+                  "generalReview": "전반적인 리뷰 내용 (마크다운 형식)",
+                  "inlineComments": [
+                    {
+                      "path": "src/main/java/Payment.java",
+                      "line": 45,
+                      "body": "이 부분은 null 체크가 필요합니다."
+                    }
+                  ],
                   "memorySuggestion": {
                     "summary": "이 기능에 대한 간단한 요약",
                     "keyPoints": ["핵심 포인트 1", "핵심 포인트 2"],
@@ -57,6 +65,13 @@ public class PromptBuilder {
                   }
                 }
                 ```
+                
+                **inlineComments 작성 규칙:**
+                - path: 파일의 전체 경로 (예: "src/main/java/Payment.java")
+                - line: 지적할 라인 번호 (라인 번호가 표시된 코드 기준)
+                - body: 구체적인 코멘트 내용
+                - 일반적인 내용은 generalReview에, 특정 라인 지적은 inlineComments에 작성
+                - inlineComments가 없으면 빈 배열 []로 전달
                 
                 memorySuggestion은 이 기능에 대해 향후 리뷰 시 참고할 중요한 정보를 포함해야 합니다.
                 """;
@@ -106,20 +121,38 @@ public class PromptBuilder {
             prompt.append("\n```\n\n");
         }
         
-        // 핵심 파일 전체 코드
+        // 핵심 파일 전체 코드 (라인 번호 포함)
         if (!coreFilesContent.isEmpty()) {
-            prompt.append("# 핵심 파일 (전체 코드)\n");
+            prompt.append("# 핵심 파일 (전체 코드 - 라인 번호 포함)\n");
             for (Map.Entry<String, String> entry : coreFilesContent.entrySet()) {
                 prompt.append("## ").append(entry.getKey()).append("\n");
                 prompt.append("```java\n");
-                prompt.append(entry.getValue());
+                prompt.append(addLineNumbers(entry.getValue()));
                 prompt.append("\n```\n\n");
             }
         }
         
-        prompt.append("위 코드를 리뷰해주세요. 추가로 필요한 파일이 있다면 요청해주세요.");
+        prompt.append("위 코드를 리뷰해주세요.\n\n");
+        prompt.append("**중요:** 특정 코드 라인에 대한 지적사항이 있다면 반드시 파일 경로와 라인 번호를 명시해주세요.");
         
         return prompt.toString();
+    }
+
+    /**
+     * 코드에 라인 번호 추가
+     * 
+     * @param content 원본 코드
+     * @return 라인 번호가 추가된 코드
+     */
+    private String addLineNumbers(String content) {
+        String[] lines = content.split("\n");
+        StringBuilder numbered = new StringBuilder();
+        
+        for (int i = 0; i < lines.length; i++) {
+            numbered.append(String.format("%4d: %s\n", i + 1, lines[i]));
+        }
+        
+        return numbered.toString();
     }
 
     /**

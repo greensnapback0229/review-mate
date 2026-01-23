@@ -12,9 +12,14 @@ import java.util.List;
 @Builder
 public class ReviewResponse {
     /**
-     * 리뷰 내용
+     * 전반적인 리뷰 내용 (PR 전체 코멘트용)
      */
-    private String review;
+    private String generalReview;
+    
+    /**
+     * 특정 라인에 대한 코멘트 목록
+     */
+    private List<InlineComment> inlineComments;
     
     /**
      * 추가 컨텍스트 필요 여부
