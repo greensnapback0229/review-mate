@@ -22,6 +22,9 @@ AI 기반 자동 코드 리뷰 시스템으로, GitHub PR에 대해 기능별 �
 - GitHub App 인증으로 안전한 API 접근
 - PR에 자동으로 리뷰 코멘트 작성
 
+## 활용 예시
+- 
+
 ## 시스템 구조
 
 ```
@@ -217,9 +220,9 @@ CREATE TABLE repository
 CREATE TABLE feature_memory
 (
     feature_memory_id      BIGINT AUTO_INCREMENT PRIMARY KEY,
-    repository_id          BIGINT NOT NULL,
+    repository_id          BIGINT       NOT NULL,
     feature_name           VARCHAR(255) NOT NULL,
-    feature_memory_content JSON NOT NULL,
+    feature_memory_content JSON         NOT NULL,
     created_at             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at             TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (repository_id) REFERENCES repository (repository_id),
