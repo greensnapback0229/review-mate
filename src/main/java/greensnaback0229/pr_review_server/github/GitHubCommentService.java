@@ -1,5 +1,6 @@
 package greensnaback0229.pr_review_server.github;
 
+import greensnaback0229.pr_review_server.config.GitHubConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.kohsuke.github.GHIssueComment;
@@ -18,7 +19,7 @@ import java.io.IOException;
 @RequiredArgsConstructor
 public class GitHubCommentService {
     
-    private final GitHub github;
+    private final GitHubConfig githubConfig;
     
     /**
      * PR에 리뷰 결과를 코멘트로 작성
@@ -32,6 +33,7 @@ public class GitHubCommentService {
         log.info("Posting review comment to {}/#{}", repoFullName, prNumber);
         
         try {
+            GitHub github = githubConfig.createGitHubClient(repoFullName);
             GHRepository repository = github.getRepository(repoFullName);
             GHPullRequest pullRequest = repository.getPullRequest(prNumber);
             

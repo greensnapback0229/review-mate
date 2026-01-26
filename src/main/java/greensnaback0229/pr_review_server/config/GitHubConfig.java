@@ -5,7 +5,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.kohsuke.github.GitHub;
 import org.kohsuke.github.GitHubBuilder;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import java.io.IOException;
@@ -13,6 +12,9 @@ import java.io.IOException;
 /**
  * GitHub API 클라이언트 설정
  * GitHub App 인증 방식 사용
+ * 
+ * Note: GitHub App은 Repository별로 다른 Installation Token이 필요하므로
+ * Bean으로 미리 생성하지 않고, 필요할 때마다 동적으로 생성합니다.
  */
 @Slf4j
 @Configuration
@@ -21,27 +23,22 @@ public class GitHubConfig {
     
     private final GitHubAppAuthenticator authenticator;
     
-    @Bean
-    public GitHub github() throws IOException {
-        log.info("Initializing GitHub client with GitHub App authentication");
+    /**
+     * Repository별로 GitHub 클라이언트 생성
+     * 
+     * @param repoFullName Repository 전체 이름 (예: "owner/repo")
+     * @return GitHub 클라이언트
+     * @throws IOException GitHub API 호출 실패 시
+     */
+    public GitHub createGitHubClient(String repoFullName) throws IOException {
+        log.debug("Creating GitHub client for repository: {}", repoFullName);
         
-        // GitHub App Installation Token 발급
-        String installationToken = authenticator.getInstallationToken();
+        // Repository별 Installation Token 발급
+        String installationToken = authenticator.getInstallationToken(repoFullName);
         
         // Token으로 GitHub 클라이언트 생성
-        GitHub github = new GitHubBuilder()
+        return new GitHubBuilder()
                 .withAppInstallationToken(installationToken)
                 .build();
-        
-        // GitHub 연결 테스트
-        try {
-            // GitHub App은 getMyself()가 없으므로 다른 방법으로 확인
-            log.info("GitHub App client initialized successfully");
-        } catch (Exception e) {
-            log.error("Failed to initialize GitHub App client: {}", e.getMessage());
-            throw e;
-        }
-        
-        return github;
     }
 }

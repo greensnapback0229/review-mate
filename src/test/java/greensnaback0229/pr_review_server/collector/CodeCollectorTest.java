@@ -2,6 +2,7 @@ package greensnaback0229.pr_review_server.collector;
 
 import greensnaback0229.pr_review_server.collector.dto.CollectedCode;
 import greensnaback0229.pr_review_server.collector.dto.FileContent;
+import greensnaback0229.pr_review_server.config.GitHubConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,6 +20,9 @@ import static org.mockito.Mockito.*;
 
 @DisplayName("CodeCollector 테스트")
 class CodeCollectorTest {
+    
+    @Mock
+    private GitHubConfig githubConfig;
     
     @Mock
     private GitHub github;
@@ -40,7 +44,10 @@ class CodeCollectorTest {
     @BeforeEach
     void setUp() throws IOException {
         MockitoAnnotations.openMocks(this);
-        codeCollector = new CodeCollector(github);
+        codeCollector = new CodeCollector(githubConfig);
+        
+        // GitHubConfig mock 설정
+        when(githubConfig.createGitHubClient(anyString())).thenReturn(github);
         
         // PagedIterable toList() mock 설정
         when(pagedIterable.toList()).thenReturn(Arrays.asList());
@@ -202,6 +209,7 @@ class CodeCollectorTest {
         int prNumber = 1;
         List<String> filteredPaths = Arrays.asList("src/main/java/PaymentService.java");
         
+        when(githubConfig.createGitHubClient(anyString())).thenReturn(github);
         when(github.getRepository(repoFullName)).thenThrow(new IOException("GitHub API error"));
         
         // when & then

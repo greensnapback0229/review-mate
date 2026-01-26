@@ -54,8 +54,8 @@ public class FeatureRegistryLoader {
         log.info("Loading feature registry from repository: {} (branch: {})", repoFullName, branch != null ? branch : "default");
         
         try {
-            // 매번 최신 토큰으로 GitHub 클라이언트 생성
-            String installationToken = authenticator.getInstallationToken();
+            // Repository별로 자동으로 Installation Token 발급
+            String installationToken = authenticator.getInstallationToken(repoFullName);
             GitHub github = new GitHubBuilder()
                     .withAppInstallationToken(installationToken)
                     .build();

@@ -1,5 +1,6 @@
 package greensnaback0229.pr_review_server.github;
 
+import greensnaback0229.pr_review_server.config.GitHubConfig;
 import greensnaback0229.pr_review_server.llm.dto.InlineComment;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,7 +23,7 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class GitHubReviewClient {
     
-    private final GitHub github;
+    private final GitHubConfig githubConfig;
     
     /**
      * PR에 리뷰 작성
@@ -40,6 +41,7 @@ public class GitHubReviewClient {
                 generalComment != null ? generalComment.length() : 0, 
                 inlineComments != null ? inlineComments.size() : 0);
         
+        GitHub github = githubConfig.createGitHubClient(repoFullName);
         GHRepository repository = github.getRepository(repoFullName);
         GHPullRequest pullRequest = repository.getPullRequest(prNumber);
         
@@ -85,8 +87,9 @@ public class GitHubReviewClient {
             }
         }
         
-        // Review 생성 (COMMENT 타입 - 승인/변경요청 없이 단순 코멘트)
-        GHPullRequestReview review = reviewBuilder.create();
+        // Review 생성 및 제출 (COMMENT 타입 - 승인/변경요청 없이 단순 코멘트)
+        // GitHub API에서 Review 제출: comment() / approve() / requestChanges()
+        GHPullRequestReview review = reviewBuilder.event(GHPullRequestReviewEvent.COMMENT).create();
         
         log.info("Successfully created review #{} for PR {}/#{}", 
                 review.getId(), repoFullName, prNumber);

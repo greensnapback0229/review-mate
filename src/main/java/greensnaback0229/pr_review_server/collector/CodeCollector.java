@@ -2,6 +2,7 @@ package greensnaback0229.pr_review_server.collector;
 
 import greensnaback0229.pr_review_server.collector.dto.CollectedCode;
 import greensnaback0229.pr_review_server.collector.dto.FileContent;
+import greensnaback0229.pr_review_server.config.GitHubConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.kohsuke.github.*;
@@ -20,7 +21,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class CodeCollector {
     
-    private final GitHub github;
+    private final GitHubConfig githubConfig;
     
     /**
      * PR의 변경된 파일들의 diff를 수집
@@ -32,6 +33,7 @@ public class CodeCollector {
      */
     public List<FileContent> collectChangedFiles(String repoFullName, int prNumber, List<String> filteredPaths) {
         try {
+            GitHub github = githubConfig.createGitHubClient(repoFullName);
             GHRepository repo = github.getRepository(repoFullName);
             GHPullRequest pr = repo.getPullRequest(prNumber);
             
@@ -132,6 +134,7 @@ public class CodeCollector {
      */
     private List<FileContent> collectFiles(String repoFullName, String branch, List<String> filePaths, FileContent.FileType type) {
         try {
+            GitHub github = githubConfig.createGitHubClient(repoFullName);
             GHRepository repo = github.getRepository(repoFullName);
             List<FileContent> files = new ArrayList<>();
             
@@ -200,6 +203,7 @@ public class CodeCollector {
      */
     public List<String> getChangedFilePaths(String repoFullName, int prNumber) {
         try {
+            GitHub github = githubConfig.createGitHubClient(repoFullName);
             GHRepository repo = github.getRepository(repoFullName);
             GHPullRequest pr = repo.getPullRequest(prNumber);
             

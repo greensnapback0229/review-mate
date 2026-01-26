@@ -17,14 +17,16 @@ import java.security.PrivateKey;
 import java.time.Instant;
 import java.util.Date;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * GitHub App 인증을 처리하는 클래스
  * 
  * 동작 방식:
  * 1. Private Key로 JWT 생성
- * 2. JWT로 Installation Access Token 발급
- * 3. Token은 1시간 유효 (자동 갱신)
+ * 2. Repository로부터 Installation 자동 탐지
+ * 3. Installation Access Token 발급 (Repository별로 자동)
+ * 4. Token은 1시간 유효 (자동 갱신 및 캐싱)
  */
 @Slf4j
 @Component
@@ -33,43 +35,55 @@ public class GitHubAppAuthenticator {
     @Value("${github.app.id}")
     private String appId;
     
-    @Value("${github.app.installation-id}")
-    private String installationId;
-    
     @Value("${github.app.private-key-path}")
     private String privateKeyPath;
     
     private final RestTemplate restTemplate = new RestTemplate();
     
-    private String cachedToken;
-    private Instant tokenExpiresAt;
+    // Repository별 토큰 캐시 (repoFullName -> TokenCache)
+    private final Map<String, TokenCache> tokenCacheMap = new ConcurrentHashMap<>();
     
     /**
-     * Installation Access Token 발급
-     * 캐시된 토큰이 유효하면 재사용, 만료되면 재발급
+     * Token 캐시 정보
      */
-    public String getInstallationToken() throws IOException {
-        // 캐시된 토큰이 유효하면 재사용
-        if (cachedToken != null && tokenExpiresAt != null 
-            && Instant.now().isBefore(tokenExpiresAt.minusSeconds(300))) { // 5분 여유
-            log.debug("Using cached installation token");
-            log.debug("Cached token (first 20 chars): {}...", cachedToken.substring(0, Math.min(20, cachedToken.length())));
-            return cachedToken;
+    private static class TokenCache {
+        String token;
+        Instant expiresAt;
+        
+        TokenCache(String token, Instant expiresAt) {
+            this.token = token;
+            this.expiresAt = expiresAt;
         }
         
-        log.info("Generating new installation token");
-        log.info("App ID: {}", appId);
-        log.info("Installation ID: {}", installationId);
-        log.info("Private Key Path: {}", privateKeyPath);
+        boolean isValid() {
+            // 5분 여유를 두고 만료 체크
+            return token != null && expiresAt != null 
+                && Instant.now().isBefore(expiresAt.minusSeconds(300));
+        }
+    }
+    
+    /**
+     * Repository로부터 자동으로 Installation을 찾아서 Token 발급
+     * 
+     * @param repoFullName Repository 전체 이름 (예: "owner/repo")
+     * @return Installation Access Token
+     * @throws IOException GitHub API 호출 실패 시
+     */
+    public String getInstallationToken(String repoFullName) throws IOException {
+        // 캐시된 토큰이 유효하면 재사용
+        TokenCache cached = tokenCacheMap.get(repoFullName);
+        if (cached != null && cached.isValid()) {
+            log.debug("Using cached installation token for {}", repoFullName);
+            return cached.token;
+        }
+        
+        log.info("Generating new installation token for repository: {}", repoFullName);
         
         // 1. JWT 생성
         String jwt = generateJWT();
         
-        // 2. Installation Token 발급
-        String url = String.format(
-            "https://api.github.com/app/installations/%s/access_tokens",
-            installationId
-        );
+        // 2. Repository의 Installation ID 조회
+        String url = String.format("https://api.github.com/repos/%s/installation", repoFullName);
         
         HttpHeaders headers = new HttpHeaders();
         headers.set("Accept", "application/vnd.github+json");
@@ -78,28 +92,64 @@ public class GitHubAppAuthenticator {
         
         HttpEntity<Void> entity = new HttpEntity<>(headers);
         
-        ResponseEntity<Map> response = restTemplate.postForEntity(url, entity, Map.class);
+        ResponseEntity<Map> installationResponse = restTemplate.exchange(
+            url, HttpMethod.GET, entity, Map.class
+        );
         
-        log.info("GitHub API response status: {}", response.getStatusCode());
-        log.info("Response body: {}", response.getBody());
-        
-        if (response.getStatusCode() == HttpStatus.CREATED) {
-            Map<String, Object> body = response.getBody();
-            cachedToken = (String) body.get("token");
-            String expiresAt = (String) body.get("expires_at");
-            tokenExpiresAt = Instant.parse(expiresAt);
-            
-            // 권한 정보 로깅
-            Map<String, Object> permissions = (Map<String, Object>) body.get("permissions");
-            log.info("Installation token generated successfully");
-            log.info("Token expires at: {}", expiresAt);
-            log.info("Token (first 20 chars): {}...", cachedToken.substring(0, Math.min(20, cachedToken.length())));
-            log.info("Permissions: {}", permissions);
-            
-            return cachedToken;
-        } else {
-            throw new RuntimeException("Failed to get installation token: " + response.getStatusCode());
+        if (installationResponse.getStatusCode() != HttpStatus.OK) {
+            throw new IOException(
+                "GitHub App is not installed on repository: " + repoFullName + ". " +
+                "Please install the app on this repository or organization."
+            );
         }
+        
+        Map<String, Object> installationData = installationResponse.getBody();
+        int installationId = (Integer) installationData.get("id");
+        
+        log.info("Found installation ID: {} for repository: {}", installationId, repoFullName);
+        
+        // 3. Installation Token 발급
+        String tokenUrl = String.format(
+            "https://api.github.com/app/installations/%d/access_tokens",
+            installationId
+        );
+        
+        ResponseEntity<Map> tokenResponse = restTemplate.postForEntity(tokenUrl, entity, Map.class);
+        
+        if (tokenResponse.getStatusCode() != HttpStatus.CREATED) {
+            throw new RuntimeException("Failed to get installation token: " + tokenResponse.getStatusCode());
+        }
+        
+        Map<String, Object> tokenData = tokenResponse.getBody();
+        String token = (String) tokenData.get("token");
+        String expiresAt = (String) tokenData.get("expires_at");
+        Instant expiresAtInstant = Instant.parse(expiresAt);
+        
+        // 4. 캐시에 저장
+        tokenCacheMap.put(repoFullName, new TokenCache(token, expiresAtInstant));
+        
+        log.info("Installation token generated successfully for {}", repoFullName);
+        log.debug("Token (first 20 chars): {}...", 
+            token.substring(0, Math.min(20, token.length())));
+        log.info("Token expires at: {}", expiresAt);
+        
+        return token;
+    }
+    
+    /**
+     * 하위 호환성을 위한 메서드 (deprecated)
+     * 기존 코드에서 Installation ID 없이 호출하는 경우
+     * 
+     * @deprecated getInstallationToken(String repoFullName) 사용 권장
+     */
+    @Deprecated
+    public String getInstallationToken() throws IOException {
+        log.warn("getInstallationToken() called without repository name. " +
+            "This method is deprecated. Please use getInstallationToken(String repoFullName)");
+        throw new UnsupportedOperationException(
+            "Installation token requires repository name. " +
+            "Use getInstallationToken(String repoFullName) instead."
+        );
     }
     
     /**
@@ -142,5 +192,22 @@ public class GitHubAppAuthenticator {
                     (object != null ? object.getClass().getName() : "null"));
             }
         }
+    }
+    
+    /**
+     * 특정 Repository의 캐시된 토큰 제거
+     * 토큰에 문제가 있을 때 수동으로 갱신하기 위해 사용
+     */
+    public void clearCache(String repoFullName) {
+        tokenCacheMap.remove(repoFullName);
+        log.info("Cleared cached token for {}", repoFullName);
+    }
+    
+    /**
+     * 모든 캐시된 토큰 제거
+     */
+    public void clearAllCache() {
+        tokenCacheMap.clear();
+        log.info("Cleared all cached tokens");
     }
 }
