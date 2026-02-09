@@ -208,4 +208,34 @@ public class LlmClient {
                     .build();
         }
     }
+
+    /**
+     * 코멘트 응답 생성
+     *
+     * @param systemPrompt 시스템 프롬프트
+     * @param userPrompt 사용자 프롬프트
+     * @return 생성된 응답 텍스트
+     */
+    public String generateCommentResponse(String systemPrompt, String userPrompt) {
+        try {
+            MessageCreateParams params = MessageCreateParams.builder()
+                    .model(Model.CLAUDE_SONNET_4_20250514)
+                    .maxTokens(2000L)
+                    .system(systemPrompt)
+                    .messages(List.of(
+                            MessageParam.builder()
+                                    .role(MessageParam.Role.USER)
+                                    .content(userPrompt)
+                                    .build()
+                    ))
+                    .build();
+
+            Message response = client.messages().create(params);
+            return extractContent(response);
+
+        } catch (Exception e) {
+            log.error("Failed to generate comment response", e);
+            throw new RuntimeException("Failed to generate comment response", e);
+        }
+    }
 }
