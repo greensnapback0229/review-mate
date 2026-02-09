@@ -4,7 +4,7 @@
 
 GitHub PR에 대해 AI 기반 자동 코드 리뷰를 제공하는 서버를 운영 중이다.
 현재 MVP가 완성된 상태로, Feature 기반 리뷰 + Feature Memory + Inline Comments의 핵심 파이프라인이 동작한다.
-다음 단계로 **리뷰 품질 향상**과 **기능 확장**을 목표로 한다.
+다음 단계로 **리뷰 품질 향상**, **기능 확장**, 그리고 **멀티 테넌트 SaaS 전환**을 목표로 한다.
 
 ## 현재 구현 상태 (v1.0 - MVP)
 
@@ -36,6 +36,11 @@ GitHub PR에 대해 AI 기반 자동 코드 리뷰를 제공하는 서버를 운
 3. Feature Memory는 Repository별로 격리된다 (repositoryId 기반)
 4. Claude Sonnet 4를 기본 리뷰 모델로 사용한다
 5. 리뷰 언어는 한국어 기본 (프롬프트 한국어)
+6. 사용자 인증은 GitHub OAuth로 처리한다
+7. Repository 연결은 GitHub App 설치 콜백으로 자동화한다
+8. 요금제: 무료 (월 30회 리뷰) / 유료 (무제한, 월 $15 API 비용 상한)
+9. 결제는 Stripe 구독으로 처리한다
+10. Web UI는 Spring + Thymeleaf로 구축한다 (동일 백엔드)
 
 ### 열린 질문
 - [ ] 리뷰 언어를 Repository별로 설정 가능하게 할 것인가?
@@ -50,7 +55,10 @@ GitHub PR에 대해 AI 기반 자동 코드 리뷰를 제공하는 서버를 운
 | **GitHub API Rate Limit** | 5000 req/hour (Installation Token) |
 | **Anthropic API** | Claude Sonnet 4, max 4000 tokens 응답 |
 | **인프라** | Docker Compose 기반, MySQL 8.0, 단일 서버 |
-| **인증** | GitHub App (JWT + Installation Token) |
+| **인증 (리뷰)** | GitHub App (JWT + Installation Token) |
+| **인증 (사용자)** | GitHub OAuth 2.0 + Spring Security |
+| **결제** | Stripe Subscription (월 $15 상한) |
+| **프론트엔드** | Spring + Thymeleaf (동일 서버) |
 | **Java 21** | Spring Boot 3.3.6 |
 
 ---
@@ -75,6 +83,19 @@ GitHub PR에 대해 AI 기반 자동 코드 리뷰를 제공하는 서버를 운
 | F7 | **multi-llm-support** | 다중 LLM 지원 (GPT, Gemini 등) | Hard |
 | F8 | **review-dashboard** | 리뷰 히스토리 조회 API / 간단한 대시보드 | Hard |
 | F9 | **review-comment-reply** | 봇 리뷰 댓글에 대한 대화형 응답 | Hard |
+
+### Phase 3: 멀티 테넌트 SaaS 전환
+
+| # | Feature | 설명 | 난이도 |
+|---|---------|------|--------|
+| F10 | **user-auth** | GitHub OAuth 로그인 + Spring Security + 사용자 DB | Hard |
+| F11 | **tenant-isolation** | 기존 데이터 모델에 user_id 추가, 멀티 테넌트 격리 | Hard |
+| F12 | **repository-management** | GitHub App 설치 콜백 → 사용자-Repo 연결, CRUD | Medium |
+| F13 | **usage-tracking** | 사용자별 월간 리뷰 횟수 추적 + API 비용 추정 | Medium |
+| F14 | **pricing-plans** | 무료(30회/월) / 유료(무제한, $15 상한) + Stripe 구독 | Hard |
+| F15 | **web-ui-auth** | Thymeleaf 로그인/회원가입/프로필 페이지 | Medium |
+| F16 | **web-ui-dashboard** | 리뷰 히스토리, 통계, Repository 목록 대시보드 | Medium |
+| F17 | **web-ui-settings** | Repository 설정, Feature Registry 편집기, 플랜 관리 | Hard |
 
 ---
 
@@ -114,6 +135,34 @@ F8: review-dashboard ───────────────────�
 
 F9: review-comment-reply ─────────────────────────
     (F1 + F8 완료 후 - 리뷰 컨텍스트 저장 필요)
+
+
+Phase 3 (멀티 테넌트 SaaS)
+══════════════════════════
+
+F10: user-auth ───────────────────────────────────┐
+    (Phase 2 완료 후, 모든 SaaS 기능의 기반)       │
+                                                    │
+F11: tenant-isolation ────────────────────────────┤  ← F10 직후
+    (F10 완료 후, DB 마이그레이션)                  │
+                                                    ▼
+F12: repository-management ─────────────────────────
+    (F10 + F11 완료 후, GitHub App 설치 연동)
+                                                    │
+F13: usage-tracking ──────────────────────────────┤  ← F12 이후
+    (F12 완료 후, 사용자별 리뷰 카운팅)             │
+                                                    ▼
+F14: pricing-plans ─────────────────────────────────
+    (F13 완료 후, Stripe 연동 + 사용량 제한)
+
+F15: web-ui-auth ─────────────────────────────────┐
+    (F10 완료 후, 로그인/회원가입 페이지)           │
+                                                    │  ← 병렬 가능
+F16: web-ui-dashboard ────────────────────────────┤
+    (F12 + F8 완료 후, 대시보드 페이지)             │
+                                                    ▼
+F17: web-ui-settings ───────────────────────────────
+    (F14 + F16 완료 후, 설정/플랜 관리 페이지)
 ```
 
 ### 권장 실행 순서
@@ -127,6 +176,14 @@ F9: review-comment-reply ──────────────────�
 7. **F7: multi-llm-support** - F6 설정 시스템 위에 구축
 8. **F8: review-dashboard** - 가시성 확보
 9. **F9: review-comment-reply** - 대화형 리뷰 응답 (F1 + F8 기반)
+10. **F10: user-auth** - GitHub OAuth + Spring Security (SaaS 기반)
+11. **F11: tenant-isolation** - DB 스키마 마이그레이션 (user_id 추가)
+12. **F12: repository-management** - GitHub App 설치 콜백 + Repo CRUD
+13. **F13: usage-tracking** - 사용자별 리뷰 횟수/비용 추적
+14. **F14: pricing-plans** - 무료/유료 플랜 + Stripe 구독
+15. **F15: web-ui-auth** - 로그인/회원가입 페이지 (F10 이후)
+16. **F16: web-ui-dashboard** - 리뷰 대시보드 페이지
+17. **F17: web-ui-settings** - 설정/Feature Registry 편집/플랜 관리
 
 ---
 
@@ -163,6 +220,19 @@ F9: review-comment-reply ──────────────────�
 | F8: review-dashboard | `.claude/docs/features/review-dashboard/SPEC.md` | 미구현 |
 | F9: review-comment-reply | `.claude/docs/features/review-comment-reply/SPEC.md` | 미구현 |
 
+### SaaS 전환 기능 (v3.0 로드맵)
+
+| Feature | SPEC 경로 | 상태 |
+|---------|-----------|------|
+| F10: user-auth | `.claude/docs/features/user-auth/SPEC.md` | 미구현 |
+| F11: tenant-isolation | `.claude/docs/features/tenant-isolation/SPEC.md` | 미구현 |
+| F12: repository-management | `.claude/docs/features/repository-management/SPEC.md` | 미구현 |
+| F13: usage-tracking | `.claude/docs/features/usage-tracking/SPEC.md` | 미구현 |
+| F14: pricing-plans | `.claude/docs/features/pricing-plans/SPEC.md` | 미구현 |
+| F15: web-ui-auth | `.claude/docs/features/web-ui-auth/SPEC.md` | 미구현 |
+| F16: web-ui-dashboard | `.claude/docs/features/web-ui-dashboard/SPEC.md` | 미구현 |
+| F17: web-ui-settings | `.claude/docs/features/web-ui-settings/SPEC.md` | 미구현 |
+
 의사결정 로그: `.claude/docs/features/{feature}/DECISION_LOG.md`
 
 ---
@@ -177,7 +247,9 @@ F9: review-comment-reply ──────────────────�
 - **Multi-language Prompt**: 다국어 프롬프트 (현재 한국어 고정)
 - **Self-hosted LLM**: 로컬 LLM 지원
 - **GitHub Actions 통합**: GitHub Actions 워크플로우로 전환
-- **Web UI 관리자 페이지**: Feature Registry를 UI에서 관리
+- **팀/조직 관리**: 팀 단위 계정 (개인 사용자만 지원)
+- **엔터프라이즈 SSO**: SAML/OIDC 기반 엔터프라이즈 인증
+- **커스텀 도메인**: 사용자별 커스텀 도메인 지원
 
 ---
 
@@ -196,3 +268,13 @@ F9: review-comment-reply ──────────────────�
 - LLM 추상화 → Strategy 패턴으로 LLM Provider 분리
 - 리뷰 결과 저장 → 새 테이블 추가 (review_history)
 - 리뷰 댓글 응답 → review_context 테이블 + Comment Webhook Handler + 스레드 답글 API
+
+### Phase 3 (아키텍처 대폭 변경)
+- **인증 체계**: Spring Security + GitHub OAuth2 Client + JWT 세션
+- **DB 마이그레이션**: 기존 테이블에 `user_id` FK 추가, `users` 테이블 신규
+- **멀티 테넌트**: 모든 쿼리에 user_id 조건 추가, 데이터 격리
+- **GitHub App 설치 플로우**: 설치 콜백 → 사용자-Repository 자동 연결
+- **사용량 추적**: `usage_log` 테이블, 월간 리뷰 카운팅 + API 비용 추정
+- **결제**: Stripe Checkout + Subscription API, Webhook으로 결제 상태 동기화
+- **프론트엔드**: Thymeleaf 템플릿 + Bootstrap/Tailwind, 같은 Spring Boot 앱에서 서빙
+- **새 DB 테이블**: `users`, `user_repositories`, `usage_log`, `subscriptions`
