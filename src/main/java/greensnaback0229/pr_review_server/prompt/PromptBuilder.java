@@ -173,7 +173,78 @@ public class PromptBuilder {
         }
         
         prompt.append("이제 최종 리뷰를 진행해주세요.");
-        
+
+        return prompt.toString();
+    }
+
+    /**
+     * 코멘트 응답 시스템 프롬프트 생성
+     *
+     * @return 시스템 프롬프트
+     */
+    public String buildCommentResponseSystemPrompt() {
+        return """
+                당신은 PR 리뷰 봇입니다. 사용자가 리뷰 코멘트에 질문하면 리뷰 컨텍스트를 기반으로 답변합니다.
+
+                ## 역할
+                - 이전에 작성한 리뷰 내용과 코드 컨텍스트를 참고하여 질문에 답변
+                - 구체적이고 명확한 설명 제공
+                - 필요시 코드 예시 포함
+
+                ## 응답 원칙
+                1. 리뷰 컨텍스트에 기반한 정확한 답변
+                2. 코드 예시를 들 때는 실제 파일 경로와 라인 번호 참조
+                3. 질문이 리뷰 범위를 벗어나면 정중히 안내
+                4. 간결하고 명확한 표현 사용
+
+                ## 응답 형식
+                - 일반 텍스트로 답변 (JSON 형식 불필요)
+                - 마크다운 형식 사용 가능
+                - 코드 블록 사용 시 적절한 언어 지정
+                """;
+    }
+
+    /**
+     * 코멘트 응답 프롬프트 생성
+     *
+     * @param commentBody 사용자 코멘트
+     * @param contexts 리뷰 컨텍스트 목록
+     * @return 사용자 메시지
+     */
+    public String buildCommentResponsePrompt(String commentBody, List<greensnaback0229.pr_review_server.comment.entity.ReviewContext> contexts) {
+        StringBuilder prompt = new StringBuilder();
+
+        prompt.append("# 리뷰 컨텍스트\n");
+        prompt.append("이전에 작성한 리뷰 내용과 코드 정보입니다.\n\n");
+
+        for (greensnaback0229.pr_review_server.comment.entity.ReviewContext context : contexts) {
+            prompt.append("## 기능: ").append(context.getFeatureName()).append("\n\n");
+
+            // 리뷰 내용
+            if (context.getGeneralReview() != null) {
+                prompt.append("### 리뷰 내용\n");
+                prompt.append(context.getGeneralReview()).append("\n\n");
+            }
+
+            // 파일 컨텍스트 (JSON → 텍스트)
+            if (context.getFileContexts() != null) {
+                prompt.append("### 파일 컨텍스트\n");
+                prompt.append(context.getFileContexts()).append("\n\n");
+            }
+
+            // 인라인 코멘트
+            if (context.getInlineComments() != null) {
+                prompt.append("### 인라인 코멘트\n");
+                prompt.append(context.getInlineComments()).append("\n\n");
+            }
+
+            prompt.append("---\n\n");
+        }
+
+        prompt.append("# 새 댓글\n");
+        prompt.append(commentBody).append("\n\n");
+        prompt.append("위 댓글에 대해 답변해주세요.");
+
         return prompt.toString();
     }
 }
