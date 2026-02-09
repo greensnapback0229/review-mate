@@ -101,89 +101,103 @@ GitHub PR에 대해 AI 기반 자동 코드 리뷰를 제공하는 서버를 운
 
 ## 작업 순서 및 의존성
 
+### 우선순위 그룹
+
+| 우선순위 | 범위 | 목표 |
+|----------|------|------|
+| **P0** | F9 | 대화형 리뷰 댓글 응답 (가장 급한 기능) |
+| **P1** | F10~F17 + F8 | 멀티 테넌트 SaaS 전환 (F8은 대시보드 데이터 필요) |
+| **P2** | F1~F7 (F8 제외) | 리뷰 품질 향상 + 최적화 (후순위) |
+
 ```
-Phase 1 (리뷰 품질 향상)
-═══════════════════════
-
-F3: webhook-security ──────────────────────────┐
-    (의존성 없음, 독립 작업)                     │
-                                                 │
-F1: review-quality ────────────────────────┐     │
-    (의존성 없음, 프롬프트 개선)             │     │  ← 병렬 가능
-                                            │     │
-F4: test-coverage ─────────────────────────┤     │
-    (F1과 병렬 가능)                        │     │
-                                            ▼     ▼
-F2: two-stage-review ──────────────────────────────
-    (F1 프롬프트 개선 후 진행 권장)
-
-
-Phase 2 (기능 확장)
+P0: 대화형 리뷰 응답
 ═══════════════════
 
-F5: async-processing ──────────────────────┐
-    (Phase 1 완료 후)                       │
-                                            │  ← 병렬 가능
-F6: review-customization ──────────────────┤
-    (Phase 1 완료 후)                       │
-                                            ▼
-F7: multi-llm-support ─────────────────────────
-    (F6 설정 시스템 필요)
-
-F8: review-dashboard ──────────────────────────
-    (F5 완료 후 - 비동기 결과 저장 필요)
-
 F9: review-comment-reply ─────────────────────────
-    (F1 + F8 완료 후 - 리뷰 컨텍스트 저장 필요)
+    (의존성 없음, 현재 MVP 위에 바로 구현 가능)
+    - issue_comment Webhook 핸들러
+    - review_context 테이블 + 코드 스니펫/diff 저장
+    - HEAD SHA 변경 감지 + 스레드 답글
 
 
-Phase 3 (멀티 테넌트 SaaS)
+P1: 멀티 테넌트 SaaS 전환
 ══════════════════════════
 
 F10: user-auth ───────────────────────────────────┐
-    (Phase 2 완료 후, 모든 SaaS 기능의 기반)       │
+    (모든 SaaS 기능의 기반, GitHub OAuth)           │
                                                     │
 F11: tenant-isolation ────────────────────────────┤  ← F10 직후
-    (F10 완료 후, DB 마이그레이션)                  │
+    (F10 완료 후, DB 마이그레이션 user_id 추가)     │
                                                     ▼
-F12: repository-management ─────────────────────────
-    (F10 + F11 완료 후, GitHub App 설치 연동)
+F12: repository-management ───────────────────┐
+    (F10 + F11 완료 후, GitHub App 설치 연동)  │
+                                               │  ← 병렬 가능
+F15: web-ui-auth ─────────────────────────────┤
+    (F10 완료 후, 로그인/프로필 페이지)         │
+                                               ▼
+F13: usage-tracking ──────────────────────────────
+    (F12 완료 후, 사용자별 리뷰 카운팅)
                                                     │
-F13: usage-tracking ──────────────────────────────┤  ← F12 이후
-    (F12 완료 후, 사용자별 리뷰 카운팅)             │
-                                                    ▼
 F14: pricing-plans ─────────────────────────────────
     (F13 완료 후, Stripe 연동 + 사용량 제한)
 
-F15: web-ui-auth ─────────────────────────────────┐
-    (F10 완료 후, 로그인/회원가입 페이지)           │
-                                                    │  ← 병렬 가능
-F16: web-ui-dashboard ────────────────────────────┤
-    (F12 + F8 완료 후, 대시보드 페이지)             │
-                                                    ▼
+F8: review-dashboard ─────────────────────────────
+    (review_history 테이블 + 조회 API, F16에 데이터 제공)
+
+F16: web-ui-dashboard ────────────────────────────
+    (F12 + F8 완료 후, 대시보드 페이지)
+                                                    │
 F17: web-ui-settings ───────────────────────────────
     (F14 + F16 완료 후, 설정/플랜 관리 페이지)
+
+
+P2: 리뷰 품질 향상 + 최적화 (후순위)
+════════════════════════════════════
+
+F3: webhook-security ──────────────────────────┐
+    (독립 작업, HMAC 검증)                      │
+                                                │  ← 병렬 가능
+F1: review-quality ────────────────────────┐    │
+    (프롬프트 엔지니어링 개선)              │    │
+                                            │    │
+F4: test-coverage ─────────────────────────┤    │
+    (F1과 병렬 가능)                        │    │
+                                            ▼    ▼
+F2: two-stage-review ──────────────────────────────
+    (F1 프롬프트 개선 후 진행 권장)
+
+F5: async-processing ──────────────────────┐
+    (비동기 리뷰 처리)                      │  ← 병렬 가능
+F6: review-customization ──────────────────┤
+                                            ▼
+F7: multi-llm-support ─────────────────────────
+    (F6 설정 시스템 필요)
 ```
 
 ### 권장 실행 순서
 
-1. **F3: webhook-security** - 보안 기본, 독립 작업, 빠르게 완료 가능
-2. **F1: review-quality** - 핵심 가치, 프롬프트 + 응답 파싱 개선
-3. **F4: test-coverage** - F1과 병렬 또는 직후, 리팩토링 안전망
-4. **F2: two-stage-review** - 기존 TODO 완성, F1 프롬프트 개선 기반
-5. **F5: async-processing** - 운영 안정성 향상
-6. **F6: review-customization** - 사용자 경험 개선
-7. **F7: multi-llm-support** - F6 설정 시스템 위에 구축
-8. **F8: review-dashboard** - 가시성 확보
-9. **F9: review-comment-reply** - 대화형 리뷰 응답 (F1 + F8 기반)
-10. **F10: user-auth** - GitHub OAuth + Spring Security (SaaS 기반)
-11. **F11: tenant-isolation** - DB 스키마 마이그레이션 (user_id 추가)
-12. **F12: repository-management** - GitHub App 설치 콜백 + Repo CRUD
-13. **F13: usage-tracking** - 사용자별 리뷰 횟수/비용 추적
-14. **F14: pricing-plans** - 무료/유료 플랜 + Stripe 구독
-15. **F15: web-ui-auth** - 로그인/회원가입 페이지 (F10 이후)
-16. **F16: web-ui-dashboard** - 리뷰 대시보드 페이지
-17. **F17: web-ui-settings** - 설정/Feature Registry 편집/플랜 관리
+**P0: 대화형 리뷰 응답**
+1. **F9: review-comment-reply** - 봇 리뷰 댓글에 대화형 응답, 현재 MVP 기반으로 즉시 착수
+
+**P1: 멀티 테넌트 SaaS 전환**
+2. **F10: user-auth** - GitHub OAuth + Spring Security (SaaS 기반)
+3. **F11: tenant-isolation** - DB 스키마 마이그레이션 (user_id 추가)
+4. **F12: repository-management** - GitHub App 설치 콜백 + Repo CRUD
+5. **F15: web-ui-auth** - 로그인/회원가입 페이지 (F12와 병렬 가능)
+6. **F13: usage-tracking** - 사용자별 리뷰 횟수/비용 추적
+7. **F14: pricing-plans** - 무료/유료 플랜 + Stripe 구독
+8. **F8: review-dashboard** - review_history 저장 + 조회 API (F16 데이터)
+9. **F16: web-ui-dashboard** - 리뷰 대시보드 페이지
+10. **F17: web-ui-settings** - 설정/Feature Registry 편집/플랜 관리
+
+**P2: 리뷰 품질 향상 + 최적화 (후순위)**
+11. **F3: webhook-security** - HMAC 검증 (독립, 빠르게 완료 가능)
+12. **F1: review-quality** - 프롬프트 + 응답 파싱 개선
+13. **F4: test-coverage** - 핵심 컴포넌트 테스트 보강
+14. **F2: two-stage-review** - 기존 TODO 완성
+15. **F5: async-processing** - 비동기 리뷰 처리
+16. **F6: review-customization** - Repository별 리뷰 설정
+17. **F7: multi-llm-support** - 다중 LLM 지원
 
 ---
 
