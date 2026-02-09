@@ -74,6 +74,7 @@ GitHub PR에 대해 AI 기반 자동 코드 리뷰를 제공하는 서버를 운
 | F6 | **review-customization** | Repository별 리뷰 설정 커스터마이징 | Medium |
 | F7 | **multi-llm-support** | 다중 LLM 지원 (GPT, Gemini 등) | Hard |
 | F8 | **review-dashboard** | 리뷰 히스토리 조회 API / 간단한 대시보드 | Hard |
+| F9 | **review-comment-reply** | 봇 리뷰 댓글에 대한 대화형 응답 | Hard |
 
 ---
 
@@ -110,6 +111,9 @@ F7: multi-llm-support ───────────────────�
 
 F8: review-dashboard ──────────────────────────
     (F5 완료 후 - 비동기 결과 저장 필요)
+
+F9: review-comment-reply ─────────────────────────
+    (F1 + F8 완료 후 - 리뷰 컨텍스트 저장 필요)
 ```
 
 ### 권장 실행 순서
@@ -122,6 +126,7 @@ F8: review-dashboard ───────────────────�
 6. **F6: review-customization** - 사용자 경험 개선
 7. **F7: multi-llm-support** - F6 설정 시스템 위에 구축
 8. **F8: review-dashboard** - 가시성 확보
+9. **F9: review-comment-reply** - 대화형 리뷰 응답 (F1 + F8 기반)
 
 ---
 
@@ -156,6 +161,7 @@ F8: review-dashboard ───────────────────�
 | F6: review-customization | `.claude/docs/features/review-customization/SPEC.md` | 미구현 |
 | F7: multi-llm-support | `.claude/docs/features/multi-llm-support/SPEC.md` | 미구현 |
 | F8: review-dashboard | `.claude/docs/features/review-dashboard/SPEC.md` | 미구현 |
+| F9: review-comment-reply | `.claude/docs/features/review-comment-reply/SPEC.md` | 미구현 |
 
 의사결정 로그: `.claude/docs/features/{feature}/DECISION_LOG.md`
 
@@ -189,3 +195,4 @@ F8: review-dashboard ───────────────────�
 - 설정 시스템 → Repository별 설정 테이블/YAML
 - LLM 추상화 → Strategy 패턴으로 LLM Provider 분리
 - 리뷰 결과 저장 → 새 테이블 추가 (review_history)
+- 리뷰 댓글 응답 → review_context 테이블 + Comment Webhook Handler + 스레드 답글 API
