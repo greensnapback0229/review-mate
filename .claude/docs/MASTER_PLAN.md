@@ -1,0 +1,191 @@
+# MASTER PLAN - PR Review Server
+
+## 문제 요약
+
+GitHub PR에 대해 AI 기반 자동 코드 리뷰를 제공하는 서버를 운영 중이다.
+현재 MVP가 완성된 상태로, Feature 기반 리뷰 + Feature Memory + Inline Comments의 핵심 파이프라인이 동작한다.
+다음 단계로 **리뷰 품질 향상**과 **기능 확장**을 목표로 한다.
+
+## 현재 구현 상태 (v1.0 - MVP)
+
+| 컴포넌트 | 상태 | 설명 |
+|-----------|------|------|
+| Webhook 수신 | **완료** | `opened`, `synchronize` 이벤트 처리, 중복 방지 |
+| Feature Registry | **완료** | YAML 기반 Feature 정의, Ant 패턴 매칭 |
+| Feature Memory | **완료** | MySQL 기반 Feature별 학습 내용 저장/조회 |
+| Code Collector | **완료** | PR diff + Core files 수집 |
+| PR Parser | **완료** | PR 제목/본문에서 Feature 추출 |
+| Prompt Builder | **완료** | Feature 정보 + Memory + Code 기반 프롬프트 생성 |
+| LLM Client | **완료** | Claude Sonnet 4 API 호출, JSON 응답 파싱 |
+| Review Aggregator | **완료** | Feature별 리뷰 집계 + Memory 업데이트 |
+| GitHub Review Client | **완료** | Position 기반 Inline Comments + General Review |
+| Draft PR 필터링 | **완료** | Draft PR은 리뷰 건너뜀 |
+| GitHub App 인증 | **완료** | JWT + Installation Token, 토큰 만료 대응 |
+
+### 미구현 항목 (코드에 TODO 존재)
+
+- 2차 리뷰 (추가 파일 요청 → 재리뷰): `PrReviewService:175` - `break`로 건너뜀
+- Webhook Secret 검증: 설정은 있으나 검증 로직 미구현
+- 비동기 처리: 현재 동기적으로 리뷰 수행
+
+## 가정 및 불명확한 요구사항
+
+### 확정된 가정
+1. 단일 GitHub App으로 여러 Repository를 지원한다
+2. Feature Registry는 각 Repository의 `.github/pr-review/feature-registry.yml`에 정의한다
+3. Feature Memory는 Repository별로 격리된다 (repositoryId 기반)
+4. Claude Sonnet 4를 기본 리뷰 모델로 사용한다
+5. 리뷰 언어는 한국어 기본 (프롬프트 한국어)
+
+### 열린 질문
+- [ ] 리뷰 언어를 Repository별로 설정 가능하게 할 것인가?
+- [ ] Feature Memory의 최대 크기/보존 기간 정책은?
+- [ ] 대용량 PR (50+ 파일) 처리 전략은? (분할 리뷰 vs 요약)
+- [ ] Rate limiting 정책은? (GitHub API / Anthropic API)
+
+## 제약 조건
+
+| 제약 | 설명 |
+|------|------|
+| **GitHub API Rate Limit** | 5000 req/hour (Installation Token) |
+| **Anthropic API** | Claude Sonnet 4, max 4000 tokens 응답 |
+| **인프라** | Docker Compose 기반, MySQL 8.0, 단일 서버 |
+| **인증** | GitHub App (JWT + Installation Token) |
+| **Java 21** | Spring Boot 3.3.6 |
+
+---
+
+## Feature 분해
+
+### Phase 1: 리뷰 품질 향상 (우선)
+
+| # | Feature | 설명 | 난이도 |
+|---|---------|------|--------|
+| F1 | **review-quality** | 프롬프트 엔지니어링 개선 + 리뷰 응답 품질 향상 | Medium |
+| F2 | **two-stage-review** | LLM이 추가 파일 요청 시 2차 리뷰 수행 | Medium |
+| F3 | **webhook-security** | Webhook Secret HMAC 검증 구현 | Easy |
+| F4 | **test-coverage** | 핵심 컴포넌트 테스트 보강 (통합 테스트 포함) | Medium |
+
+### Phase 2: 기능 확장
+
+| # | Feature | 설명 | 난이도 |
+|---|---------|------|--------|
+| F5 | **async-processing** | 비동기 리뷰 처리 (Webhook 즉시 응답) | Medium |
+| F6 | **review-customization** | Repository별 리뷰 설정 커스터마이징 | Medium |
+| F7 | **multi-llm-support** | 다중 LLM 지원 (GPT, Gemini 등) | Hard |
+| F8 | **review-dashboard** | 리뷰 히스토리 조회 API / 간단한 대시보드 | Hard |
+
+---
+
+## 작업 순서 및 의존성
+
+```
+Phase 1 (리뷰 품질 향상)
+═══════════════════════
+
+F3: webhook-security ──────────────────────────┐
+    (의존성 없음, 독립 작업)                     │
+                                                 │
+F1: review-quality ────────────────────────┐     │
+    (의존성 없음, 프롬프트 개선)             │     │  ← 병렬 가능
+                                            │     │
+F4: test-coverage ─────────────────────────┤     │
+    (F1과 병렬 가능)                        │     │
+                                            ▼     ▼
+F2: two-stage-review ──────────────────────────────
+    (F1 프롬프트 개선 후 진행 권장)
+
+
+Phase 2 (기능 확장)
+═══════════════════
+
+F5: async-processing ──────────────────────┐
+    (Phase 1 완료 후)                       │
+                                            │  ← 병렬 가능
+F6: review-customization ──────────────────┤
+    (Phase 1 완료 후)                       │
+                                            ▼
+F7: multi-llm-support ─────────────────────────
+    (F6 설정 시스템 필요)
+
+F8: review-dashboard ──────────────────────────
+    (F5 완료 후 - 비동기 결과 저장 필요)
+```
+
+### 권장 실행 순서
+
+1. **F3: webhook-security** - 보안 기본, 독립 작업, 빠르게 완료 가능
+2. **F1: review-quality** - 핵심 가치, 프롬프트 + 응답 파싱 개선
+3. **F4: test-coverage** - F1과 병렬 또는 직후, 리팩토링 안전망
+4. **F2: two-stage-review** - 기존 TODO 완성, F1 프롬프트 개선 기반
+5. **F5: async-processing** - 운영 안정성 향상
+6. **F6: review-customization** - 사용자 경험 개선
+7. **F7: multi-llm-support** - F6 설정 시스템 위에 구축
+8. **F8: review-dashboard** - 가시성 확보
+
+---
+
+## Feature별 SPEC 문서
+
+각 Feature의 상세 명세는 아래 경로에서 관리:
+
+### MVP 기능 (v1.0, 구현 완료)
+
+| Feature | SPEC 경로 | 핵심 파일 |
+|---------|-----------|-----------|
+| webhook-receiver | `.claude/docs/features/webhook-receiver/SPEC.md` | WebhookController.java |
+| feature-registry | `.claude/docs/features/feature-registry/SPEC.md` | FeatureRegistry.java, FeatureRegistryLoader.java |
+| feature-memory | `.claude/docs/features/feature-memory/SPEC.md` | FeatureMemoryRepository.java, FeatureResolver.java |
+| code-collector | `.claude/docs/features/code-collector/SPEC.md` | CodeCollector.java |
+| pr-parser | `.claude/docs/features/pr-parser/SPEC.md` | PrParser.java |
+| prompt-builder | `.claude/docs/features/prompt-builder/SPEC.md` | PromptBuilder.java |
+| llm-client | `.claude/docs/features/llm-client/SPEC.md` | LlmClient.java |
+| review-aggregator | `.claude/docs/features/review-aggregator/SPEC.md` | ReviewAggregator.java |
+| github-review-client | `.claude/docs/features/github-review-client/SPEC.md` | GitHubReviewClient.java |
+| github-app-auth | `.claude/docs/features/github-app-auth/SPEC.md` | GitHubAppAuthenticator.java, GitHubConfig.java |
+
+### 신규 개선/확장 기능 (v2.0 로드맵)
+
+| Feature | SPEC 경로 | 상태 |
+|---------|-----------|------|
+| F1: review-quality | `.claude/docs/features/review-quality/SPEC.md` | 미구현 |
+| F2: two-stage-review | `.claude/docs/features/two-stage-review/SPEC.md` | 미구현 |
+| F3: webhook-security | `.claude/docs/features/webhook-security/SPEC.md` | 미구현 |
+| F4: test-coverage | `.claude/docs/features/test-coverage/SPEC.md` | 미구현 |
+| F5: async-processing | `.claude/docs/features/async-processing/SPEC.md` | 미구현 |
+| F6: review-customization | `.claude/docs/features/review-customization/SPEC.md` | 미구현 |
+| F7: multi-llm-support | `.claude/docs/features/multi-llm-support/SPEC.md` | 미구현 |
+| F8: review-dashboard | `.claude/docs/features/review-dashboard/SPEC.md` | 미구현 |
+
+의사결정 로그: `.claude/docs/features/{feature}/DECISION_LOG.md`
+
+---
+
+## 범위 제외 항목 (Non-goals)
+
+이번 로드맵에서 **의도적으로 제외**한 항목:
+
+- **자동 코드 수정 제안 (Auto-fix)**: PR에 직접 코드 수정 커밋하는 기능
+- **Slack/Discord 연동**: 리뷰 결과 메신저 알림
+- **PR Approve/Request Changes**: 현재 COMMENT 이벤트만 사용 (자동 승인/변경요청 위험)
+- **Multi-language Prompt**: 다국어 프롬프트 (현재 한국어 고정)
+- **Self-hosted LLM**: 로컬 LLM 지원
+- **GitHub Actions 통합**: GitHub Actions 워크플로우로 전환
+- **Web UI 관리자 페이지**: Feature Registry를 UI에서 관리
+
+---
+
+## 아키텍처 변경 예상
+
+### Phase 1 (변경 최소)
+- `WebhookController` - HMAC 검증 추가
+- `PromptBuilder` - 프롬프트 구조 대폭 개선
+- `LlmClient` - 응답 파싱 강화
+- `PrReviewService` - 2차 리뷰 로직 완성
+- 테스트 파일 대폭 추가
+
+### Phase 2 (구조적 변경)
+- 비동기 처리 도입 → `@Async` 또는 메시지 큐
+- 설정 시스템 → Repository별 설정 테이블/YAML
+- LLM 추상화 → Strategy 패턴으로 LLM Provider 분리
+- 리뷰 결과 저장 → 새 테이블 추가 (review_history)
