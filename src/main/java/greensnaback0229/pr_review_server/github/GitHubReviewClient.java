@@ -8,6 +8,7 @@ import org.kohsuke.github.*;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,14 +28,15 @@ public class GitHubReviewClient {
     
     /**
      * PR에 리뷰 작성
-     * 
+     *
      * @param repoFullName 저장소 전체 이름 (예: "owner/repo")
      * @param prNumber PR 번호
      * @param generalComment 전반적인 코멘트 (PR 전체에 대한 리뷰)
      * @param inlineComments 특정 라인에 대한 코멘트 목록
+     * @return 생성된 리뷰 코멘트 ID 목록 (봇 답글 감지용)
      * @throws IOException GitHub API 호출 실패 시
      */
-    public void createReview(String repoFullName, int prNumber, String generalComment, 
+    public List<Long> createReview(String repoFullName, int prNumber, String generalComment,
                            List<InlineComment> inlineComments) throws IOException {
         log.info("Creating review for PR {}/#{}", repoFullName, prNumber);
         log.info("General comment length: {}, Inline comments count: {}", 
@@ -90,9 +92,22 @@ public class GitHubReviewClient {
         // Review 생성 및 제출 (COMMENT 타입 - 승인/변경요청 없이 단순 코멘트)
         // GitHub API에서 Review 제출: comment() / approve() / requestChanges()
         GHPullRequestReview review = reviewBuilder.event(GHPullRequestReviewEvent.COMMENT).create();
-        
-        log.info("Successfully created review #{} for PR {}/#{}", 
+
+        log.info("Successfully created review #{} for PR {}/#{}",
                 review.getId(), repoFullName, prNumber);
+
+        // 리뷰 코멘트 ID 수집 (봇 답글 감지용)
+        List<Long> commentIds = new ArrayList<>();
+        try {
+            for (GHPullRequestReviewComment comment : review.listReviewComments()) {
+                commentIds.add(comment.getId());
+            }
+            log.info("Collected {} comment IDs from review #{}", commentIds.size(), review.getId());
+        } catch (Exception e) {
+            log.warn("Failed to collect comment IDs from review: {}", e.getMessage());
+        }
+
+        return commentIds;
     }
     
     /**
@@ -186,13 +201,52 @@ public class GitHubReviewClient {
     
     /**
      * PR에 일반 코멘트만 작성 (inline comments 없이)
-     * 
+     *
      * @param repoFullName 저장소 전체 이름 (예: "owner/repo")
      * @param prNumber PR 번호
      * @param comment 코멘트 내용
+     * @return 생성된 리뷰 코멘트 ID 목록 (봇 답글 감지용)
      * @throws IOException GitHub API 호출 실패 시
      */
-    public void createSimpleComment(String repoFullName, int prNumber, String comment) throws IOException {
-        createReview(repoFullName, prNumber, comment, List.of());
+    public List<Long> createSimpleComment(String repoFullName, int prNumber, String comment) throws IOException {
+        return createReview(repoFullName, prNumber, comment, List.of());
+    }
+
+    /**
+     * PR 리뷰 코멘트에 스레드 답글 작성
+     *
+     * @param repoFullName 저장소 전체 이름 (예: "owner/repo")
+     * @param prNumber PR 번호
+     * @param commentId 답글을 달 리뷰 코멘트 ID
+     * @param replyBody 답글 내용
+     * @return 새로 생성된 코멘트 ID (다중 턴 감지용)
+     * @throws IOException GitHub API 호출 실패 시
+     */
+    public long replyToReviewComment(String repoFullName, int prNumber, long commentId, String replyBody) throws IOException {
+        log.info("Replying to review comment #{} on PR {}/#{}", commentId, repoFullName, prNumber);
+
+        GitHub github = githubConfig.createGitHubClient(repoFullName);
+        GHRepository repository = github.getRepository(repoFullName);
+        GHPullRequest pullRequest = repository.getPullRequest(prNumber);
+
+        // 대상 리뷰 코멘트 찾기
+        GHPullRequestReviewComment targetComment = null;
+        for (GHPullRequestReviewComment comment : pullRequest.listReviewComments().toList()) {
+            if (comment.getId() == commentId) {
+                targetComment = comment;
+                break;
+            }
+        }
+
+        if (targetComment == null) {
+            throw new IOException("Review comment not found: " + commentId);
+        }
+
+        // 리뷰 코멘트 스레드에 답글 작성
+        GHPullRequestReviewComment reply = targetComment.reply(replyBody);
+
+        log.info("Successfully posted reply to review comment #{}: new comment ID = {}",
+                commentId, reply.getId());
+        return reply.getId();
     }
 }

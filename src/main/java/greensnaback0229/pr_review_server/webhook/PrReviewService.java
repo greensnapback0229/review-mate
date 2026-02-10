@@ -20,6 +20,7 @@ import greensnaback0229.pr_review_server.llm.dto.ReviewResponse;
 import greensnaback0229.pr_review_server.parser.PrParser;
 import greensnaback0229.pr_review_server.parser.dto.PrContext;
 import greensnaback0229.pr_review_server.prompt.PromptBuilder;
+import greensnaback0229.pr_review_server.comment.ReviewContextService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -38,6 +39,7 @@ public class PrReviewService {
 	private final PromptBuilder promptBuilder;
 	private final LlmClient llmClient;
 	private final ReviewAggregator reviewAggregator;
+	private final ReviewContextService reviewContextService;
 
 	/**
 	 * PR 리뷰 전체 프로세스 실행
@@ -52,7 +54,7 @@ public class PrReviewService {
 	 * @return 기능별 집계된 리뷰 결과 목록
 	 */
 	public List<AggregatedReview> reviewPullRequest(Long repositoryId, String repoFullName, int prNumber, String prTitle,
-		String prBody, String baseBranch, String headBranch) {
+		String prBody, String baseBranch, String headBranch, String headSha) {
 		log.info("Starting PR review for {}/#{} (repositoryId={})", repoFullName, prNumber, repositoryId);
 
 		try {
@@ -73,7 +75,7 @@ public class PrReviewService {
 			// Main features 리뷰
 			for (String feature : prContext.getMainFeatures()) {
 				AggregatedReview review = reviewFeature(repositoryId, repoFullName, prNumber, baseBranch,
-					headBranch, feature, prContext, changedFiles, featureRegistry);
+					headBranch, headSha, feature, prContext, changedFiles, featureRegistry);
 				if (review != null) {
 					reviews.add(review);
 				}
@@ -82,7 +84,7 @@ public class PrReviewService {
 			// Related features 리뷰
 			for (String feature : prContext.getRelatedFeatures()) {
 				AggregatedReview review = reviewFeature(repositoryId, repoFullName, prNumber, baseBranch,
-					headBranch, feature, prContext, changedFiles, featureRegistry);
+					headBranch, headSha, feature, prContext, changedFiles, featureRegistry);
 				if (review != null) {
 					reviews.add(review);
 				}
@@ -113,7 +115,7 @@ public class PrReviewService {
 	 * @return 집계된 리뷰 결과
 	 */
 	private AggregatedReview reviewFeature(Long repositoryId, String repoFullName, int prNumber, String baseBranch,
-		String headBranch, String feature, PrContext prContext, List<String> changedFiles,
+		String headBranch, String headSha, String feature, PrContext prContext, List<String> changedFiles,
 		Map<String, FeatureDefinition> featureRegistry) {
 		try {
 			log.info("Reviewing feature: {}", feature);
@@ -183,7 +185,17 @@ public class PrReviewService {
 			}
 
 			// 9. 리뷰 집계
-			return reviewAggregator.aggregate(repositoryId, feature, reviewResponse);
+			AggregatedReview aggregatedReview = reviewAggregator.aggregate(repositoryId, feature, reviewResponse);
+
+			// 10. 리뷰 컨텍스트 저장 (댓글 응답 기능용)
+			try {
+				reviewContextService.saveReviewContext(
+						repositoryId, prNumber, feature, headSha, collectedCode, aggregatedReview);
+			} catch (Exception e) {
+				log.warn("Failed to save review context for feature {}: {}", feature, e.getMessage());
+			}
+
+			return aggregatedReview;
 
 		} catch (Exception e) {
 			log.error("Failed to review feature {}: {}", feature, e.getMessage(), e);
