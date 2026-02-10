@@ -84,6 +84,12 @@ GitHub PR에 대해 AI 기반 자동 코드 리뷰를 제공하는 서버를 운
 | F8 | **review-dashboard** | 리뷰 히스토리 조회 API / 간단한 대시보드 | Hard |
 | F9 | **review-comment-reply** | 봇 리뷰 댓글에 대한 대화형 응답 | Hard |
 
+### Phase 1.5: CI/CD 파이프라인
+
+| # | Feature | 설명 | 난이도 |
+|---|---------|------|--------|
+| F18 | **ci-cd-pipeline** | GitHub Actions CI(테스트) + CD(빌드+DockerHub 푸시) | Easy |
+
 ### Phase 3: 멀티 테넌트 SaaS 전환
 
 | # | Feature | 설명 | 난이도 |
@@ -105,7 +111,7 @@ GitHub PR에 대해 AI 기반 자동 코드 리뷰를 제공하는 서버를 운
 
 | 우선순위 | 범위 | 목표 |
 |----------|------|------|
-| **P0** | F9 | 대화형 리뷰 댓글 응답 (가장 급한 기능) |
+| **P0** | F9, F18 | 대화형 리뷰 댓글 응답 + CI/CD 파이프라인 (가장 급한 기능) |
 | **P1** | F10~F17 + F8 | 멀티 테넌트 SaaS 전환 (F8은 대시보드 데이터 필요) |
 | **P2** | F1~F7 (F8 제외) | 리뷰 품질 향상 + 최적화 (후순위) |
 
@@ -118,6 +124,12 @@ F9: review-comment-reply ──────────────────�
     - issue_comment Webhook 핸들러
     - review_context 테이블 + 코드 스니펫/diff 저장
     - HEAD SHA 변경 감지 + 스레드 답글
+
+F18: ci-cd-pipeline ──────────────────────────────
+    (의존성 없음, 독립 작업)
+    - CI: PR → Gradle 테스트 (ci.yml)
+    - CD: main push → Gradle 빌드 + DockerHub 푸시 (cd.yml)
+    - 이미지: smdmim/review-mate (latest + SHA 태그)
 
 
 P1: 멀티 테넌트 SaaS 전환
@@ -176,78 +188,103 @@ F7: multi-llm-support ───────────────────�
 
 ### 권장 실행 순서
 
-**P0: 대화형 리뷰 응답**
+**P0: 대화형 리뷰 응답 + CI/CD**
 1. **F9: review-comment-reply** - 봇 리뷰 댓글에 대화형 응답, 현재 MVP 기반으로 즉시 착수
+2. **F18: ci-cd-pipeline** - GitHub Actions CI/CD (테스트 + DockerHub 푸시), F9와 병렬 가능
 
 **P1: 멀티 테넌트 SaaS 전환**
-2. **F10: user-auth** - GitHub OAuth + Spring Security (SaaS 기반)
-3. **F11: tenant-isolation** - DB 스키마 마이그레이션 (user_id 추가)
-4. **F12: repository-management** - GitHub App 설치 콜백 + Repo CRUD
-5. **F15: web-ui-auth** - 로그인/회원가입 페이지 (F12와 병렬 가능)
-6. **F13: usage-tracking** - 사용자별 리뷰 횟수/비용 추적
-7. **F14: pricing-plans** - 무료/유료 플랜 + Stripe 구독
-8. **F8: review-dashboard** - review_history 저장 + 조회 API (F16 데이터)
-9. **F16: web-ui-dashboard** - 리뷰 대시보드 페이지
-10. **F17: web-ui-settings** - 설정/Feature Registry 편집/플랜 관리
+3. **F10: user-auth** - GitHub OAuth + Spring Security (SaaS 기반)
+4. **F11: tenant-isolation** - DB 스키마 마이그레이션 (user_id 추가)
+5. **F12: repository-management** - GitHub App 설치 콜백 + Repo CRUD
+6. **F15: web-ui-auth** - 로그인/회원가입 페이지 (F12와 병렬 가능)
+7. **F13: usage-tracking** - 사용자별 리뷰 횟수/비용 추적
+8. **F14: pricing-plans** - 무료/유료 플랜 + Stripe 구독
+9. **F8: review-dashboard** - review_history 저장 + 조회 API (F16 데이터)
+10. **F16: web-ui-dashboard** - 리뷰 대시보드 페이지
+11. **F17: web-ui-settings** - 설정/Feature Registry 편집/플랜 관리
 
 **P2: 리뷰 품질 향상 + 최적화 (후순위)**
-11. **F3: webhook-security** - HMAC 검증 (독립, 빠르게 완료 가능)
-12. **F1: review-quality** - 프롬프트 + 응답 파싱 개선
-13. **F4: test-coverage** - 핵심 컴포넌트 테스트 보강
-14. **F2: two-stage-review** - 기존 TODO 완성
-15. **F5: async-processing** - 비동기 리뷰 처리
-16. **F6: review-customization** - Repository별 리뷰 설정
-17. **F7: multi-llm-support** - 다중 LLM 지원
+12. **F3: webhook-security** - HMAC 검증 (독립, 빠르게 완료 가능)
+13. **F1: review-quality** - 프롬프트 + 응답 파싱 개선
+14. **F4: test-coverage** - 핵심 컴포넌트 테스트 보강
+15. **F2: two-stage-review** - 기존 TODO 완성
+16. **F5: async-processing** - 비동기 리뷰 처리
+17. **F6: review-customization** - Repository별 리뷰 설정
+18. **F7: multi-llm-support** - 다중 LLM 지원
 
 ---
 
 ## Feature별 SPEC 문서
 
-각 Feature의 상세 명세는 아래 경로에서 관리:
+각 Feature의 상세 명세는 도메인별로 분류하여 관리합니다.
+도메인 인덱스: [`.claude/docs/domains/INDEX.md`](domains/INDEX.md)
 
-### MVP 기능 (v1.0, 구현 완료)
-
-| Feature | SPEC 경로 | 핵심 파일 |
-|---------|-----------|-----------|
-| webhook-receiver | `.claude/docs/features/webhook-receiver/SPEC.md` | WebhookController.java |
-| feature-registry | `.claude/docs/features/feature-registry/SPEC.md` | FeatureRegistry.java, FeatureRegistryLoader.java |
-| feature-memory | `.claude/docs/features/feature-memory/SPEC.md` | FeatureMemoryRepository.java, FeatureResolver.java |
-| code-collector | `.claude/docs/features/code-collector/SPEC.md` | CodeCollector.java |
-| pr-parser | `.claude/docs/features/pr-parser/SPEC.md` | PrParser.java |
-| prompt-builder | `.claude/docs/features/prompt-builder/SPEC.md` | PromptBuilder.java |
-| llm-client | `.claude/docs/features/llm-client/SPEC.md` | LlmClient.java |
-| review-aggregator | `.claude/docs/features/review-aggregator/SPEC.md` | ReviewAggregator.java |
-| github-review-client | `.claude/docs/features/github-review-client/SPEC.md` | GitHubReviewClient.java |
-| github-app-auth | `.claude/docs/features/github-app-auth/SPEC.md` | GitHubAppAuthenticator.java, GitHubConfig.java |
-
-### 신규 개선/확장 기능 (v2.0 로드맵)
+### api 도메인 (API/Webhook)
 
 | Feature | SPEC 경로 | 상태 |
 |---------|-----------|------|
-| F1: review-quality | `.claude/docs/features/review-quality/SPEC.md` | 미구현 |
-| F2: two-stage-review | `.claude/docs/features/two-stage-review/SPEC.md` | 미구현 |
-| F3: webhook-security | `.claude/docs/features/webhook-security/SPEC.md` | 미구현 |
-| F4: test-coverage | `.claude/docs/features/test-coverage/SPEC.md` | 미구현 |
-| F5: async-processing | `.claude/docs/features/async-processing/SPEC.md` | 미구현 |
-| F6: review-customization | `.claude/docs/features/review-customization/SPEC.md` | 미구현 |
-| F7: multi-llm-support | `.claude/docs/features/multi-llm-support/SPEC.md` | 미구현 |
-| F8: review-dashboard | `.claude/docs/features/review-dashboard/SPEC.md` | 미구현 |
-| F9: review-comment-reply | `.claude/docs/features/review-comment-reply/SPEC.md` | 미구현 |
+| webhook-receiver | `.claude/docs/domains/api/features/webhook-receiver/SPEC.md` | 완료 |
+| webhook-security | `.claude/docs/domains/api/features/webhook-security/SPEC.md` | 미구현 |
+| github-app-auth | `.claude/docs/domains/api/features/github-app-auth/SPEC.md` | 완료 |
+| async-processing | `.claude/docs/domains/api/features/async-processing/SPEC.md` | 미구현 |
 
-### SaaS 전환 기능 (v3.0 로드맵)
+### review 도메인 (코드 리뷰)
+
+#### pipeline (핵심 파이프라인)
 
 | Feature | SPEC 경로 | 상태 |
 |---------|-----------|------|
-| F10: user-auth | `.claude/docs/features/user-auth/SPEC.md` | 미구현 |
-| F11: tenant-isolation | `.claude/docs/features/tenant-isolation/SPEC.md` | 미구현 |
-| F12: repository-management | `.claude/docs/features/repository-management/SPEC.md` | 미구현 |
-| F13: usage-tracking | `.claude/docs/features/usage-tracking/SPEC.md` | 미구현 |
-| F14: pricing-plans | `.claude/docs/features/pricing-plans/SPEC.md` | 미구현 |
-| F15: web-ui-auth | `.claude/docs/features/web-ui-auth/SPEC.md` | 미구현 |
-| F16: web-ui-dashboard | `.claude/docs/features/web-ui-dashboard/SPEC.md` | 미구현 |
-| F17: web-ui-settings | `.claude/docs/features/web-ui-settings/SPEC.md` | 미구현 |
+| feature-registry | `.claude/docs/domains/review/categories/pipeline/features/feature-registry/SPEC.md` | 완료 |
+| feature-memory | `.claude/docs/domains/review/categories/pipeline/features/feature-memory/SPEC.md` | 완료 |
+| code-collector | `.claude/docs/domains/review/categories/pipeline/features/code-collector/SPEC.md` | 완료 |
+| pr-parser | `.claude/docs/domains/review/categories/pipeline/features/pr-parser/SPEC.md` | 완료 |
+| prompt-builder | `.claude/docs/domains/review/categories/pipeline/features/prompt-builder/SPEC.md` | 완료 |
+| llm-client | `.claude/docs/domains/review/categories/pipeline/features/llm-client/SPEC.md` | 완료 |
+| review-aggregator | `.claude/docs/domains/review/categories/pipeline/features/review-aggregator/SPEC.md` | 완료 |
+| github-review-client | `.claude/docs/domains/review/categories/pipeline/features/github-review-client/SPEC.md` | 완료 |
 
-의사결정 로그: `.claude/docs/features/{feature}/DECISION_LOG.md`
+#### enhancement (품질 개선)
+
+| Feature | SPEC 경로 | 상태 |
+|---------|-----------|------|
+| review-quality | `.claude/docs/domains/review/categories/enhancement/features/review-quality/SPEC.md` | 미구현 |
+| two-stage-review | `.claude/docs/domains/review/categories/enhancement/features/two-stage-review/SPEC.md` | 미구현 |
+| review-comment-reply | `.claude/docs/domains/review/categories/enhancement/features/review-comment-reply/SPEC.md` | 미구현 |
+
+#### config (설정/확장)
+
+| Feature | SPEC 경로 | 상태 |
+|---------|-----------|------|
+| review-customization | `.claude/docs/domains/review/categories/config/features/review-customization/SPEC.md` | 미구현 |
+| multi-llm-support | `.claude/docs/domains/review/categories/config/features/multi-llm-support/SPEC.md` | 미구현 |
+
+### infrastructure 도메인 (테스트/품질/CI·CD)
+
+| Feature | SPEC 경로 | 상태 |
+|---------|-----------|------|
+| test-coverage | `.claude/docs/domains/infrastructure/features/test-coverage/SPEC.md` | 미구현 |
+| ci-cd-pipeline | `.claude/docs/domains/infrastructure/features/ci-cd-pipeline/SPEC.md` | 미구현 |
+
+### saas 도메인 (멀티 테넌트/과금)
+
+| Feature | SPEC 경로 | 상태 |
+|---------|-----------|------|
+| user-auth | `.claude/docs/domains/saas/features/user-auth/SPEC.md` | 미구현 |
+| tenant-isolation | `.claude/docs/domains/saas/features/tenant-isolation/SPEC.md` | 미구현 |
+| repository-management | `.claude/docs/domains/saas/features/repository-management/SPEC.md` | 미구현 |
+| usage-tracking | `.claude/docs/domains/saas/features/usage-tracking/SPEC.md` | 미구현 |
+| pricing-plans | `.claude/docs/domains/saas/features/pricing-plans/SPEC.md` | 미구현 |
+
+### web-ui 도메인 (프론트엔드)
+
+| Feature | SPEC 경로 | 상태 |
+|---------|-----------|------|
+| web-ui-auth | `.claude/docs/domains/web-ui/features/web-ui-auth/SPEC.md` | 미구현 |
+| web-ui-dashboard | `.claude/docs/domains/web-ui/features/web-ui-dashboard/SPEC.md` | 미구현 |
+| web-ui-settings | `.claude/docs/domains/web-ui/features/web-ui-settings/SPEC.md` | 미구현 |
+| review-dashboard | `.claude/docs/domains/web-ui/features/review-dashboard/SPEC.md` | 미구현 |
+
+의사결정 로그: 각 Feature의 SPEC.md와 동일 경로에 `DECISION_LOG.md`로 관리
 
 ---
 
@@ -260,7 +297,7 @@ F7: multi-llm-support ───────────────────�
 - **PR Approve/Request Changes**: 현재 COMMENT 이벤트만 사용 (자동 승인/변경요청 위험)
 - **Multi-language Prompt**: 다국어 프롬프트 (현재 한국어 고정)
 - **Self-hosted LLM**: 로컬 LLM 지원
-- **GitHub Actions 통합**: GitHub Actions 워크플로우로 전환
+- ~~**GitHub Actions 통합**: GitHub Actions 워크플로우로 전환~~ → F18로 추가됨
 - **팀/조직 관리**: 팀 단위 계정 (개인 사용자만 지원)
 - **엔터프라이즈 SSO**: SAML/OIDC 기반 엔터프라이즈 인증
 - **커스텀 도메인**: 사용자별 커스텀 도메인 지원
