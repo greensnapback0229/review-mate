@@ -44,6 +44,7 @@ public class PrReviewService {
 	/**
 	 * PR 리뷰 전체 프로세스 실행
 	 *
+	 * @param apiKey Anthropic API 키
 	 * @param repositoryId GitHub Repository ID
 	 * @param repoFullName 저장소 풀네임 (예: owner/repo)
 	 * @param prNumber PR 번호
@@ -53,7 +54,7 @@ public class PrReviewService {
 	 * @param headBranch Head 브랜치명 (PR 브랜치)
 	 * @return 기능별 집계된 리뷰 결과 목록
 	 */
-	public List<AggregatedReview> reviewPullRequest(Long repositoryId, String repoFullName, int prNumber, String prTitle,
+	public List<AggregatedReview> reviewPullRequest(String apiKey, Long repositoryId, String repoFullName, int prNumber, String prTitle,
 		String prBody, String baseBranch, String headBranch, String headSha) {
 		log.info("Starting PR review for {}/#{} (repositoryId={})", repoFullName, prNumber, repositoryId);
 
@@ -74,7 +75,7 @@ public class PrReviewService {
 
 			// Main features 리뷰
 			for (String feature : prContext.getMainFeatures()) {
-				AggregatedReview review = reviewFeature(repositoryId, repoFullName, prNumber, baseBranch,
+				AggregatedReview review = reviewFeature(apiKey, repositoryId, repoFullName, prNumber, baseBranch,
 					headBranch, headSha, feature, prContext, changedFiles, featureRegistry);
 				if (review != null) {
 					reviews.add(review);
@@ -83,7 +84,7 @@ public class PrReviewService {
 
 			// Related features 리뷰
 			for (String feature : prContext.getRelatedFeatures()) {
-				AggregatedReview review = reviewFeature(repositoryId, repoFullName, prNumber, baseBranch,
+				AggregatedReview review = reviewFeature(apiKey, repositoryId, repoFullName, prNumber, baseBranch,
 					headBranch, headSha, feature, prContext, changedFiles, featureRegistry);
 				if (review != null) {
 					reviews.add(review);
@@ -103,6 +104,7 @@ public class PrReviewService {
 	/**
 	 * 단일 기능에 대한 리뷰 수행
 	 *
+	 * @param apiKey Anthropic API 키
 	 * @param repositoryId GitHub Repository ID
 	 * @param repoFullName 저장소 풀네임
 	 * @param prNumber PR 번호
@@ -114,7 +116,7 @@ public class PrReviewService {
 	 * @param featureRegistry 기능 정의 Map
 	 * @return 집계된 리뷰 결과
 	 */
-	private AggregatedReview reviewFeature(Long repositoryId, String repoFullName, int prNumber, String baseBranch,
+	private AggregatedReview reviewFeature(String apiKey, Long repositoryId, String repoFullName, int prNumber, String baseBranch,
 		String headBranch, String headSha, String feature, PrContext prContext, List<String> changedFiles,
 		Map<String, FeatureDefinition> featureRegistry) {
 		try {
@@ -171,7 +173,7 @@ public class PrReviewService {
 				resolvedFeature, changedFilesMap, coreFilesMap);
 
 			// 7. LLM 리뷰 요청
-			ReviewResponse reviewResponse = llmClient.startReview(systemPrompt, initialPrompt);
+			ReviewResponse reviewResponse = llmClient.startReview(apiKey, systemPrompt, initialPrompt);
 
 			// 8. 추가 파일 요청 처리 (필요시)
 			while (reviewResponse.isNeedMoreContext()) {

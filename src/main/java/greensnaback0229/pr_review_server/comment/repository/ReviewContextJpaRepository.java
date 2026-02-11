@@ -2,6 +2,9 @@ package greensnaback0229.pr_review_server.comment.repository;
 
 import greensnaback0229.pr_review_server.comment.entity.ReviewContext;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -16,4 +19,8 @@ public interface ReviewContextJpaRepository extends JpaRepository<ReviewContext,
     List<ReviewContext> findByRepositoryIdAndPrNumber(Long repositoryId, Integer prNumber);
 
     boolean existsByRepositoryIdAndPrNumber(Long repositoryId, Integer prNumber);
+
+    @Modifying
+    @Query("UPDATE ReviewContext rc SET rc.userId = :userId WHERE rc.userId IS NULL")
+    int updateUserIdWhereNull(@Param("userId") Long userId);
 }

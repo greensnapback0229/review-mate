@@ -1,6 +1,7 @@
 package greensnaback0229.pr_review_server.webhook;
 
 import greensnaback0229.pr_review_server.aggregator.dto.AggregatedReview;
+import greensnaback0229.pr_review_server.auth.ApiKeyService;
 import greensnaback0229.pr_review_server.comment.CommentResponseService;
 import greensnaback0229.pr_review_server.comment.ReviewContextService;
 import greensnaback0229.pr_review_server.comment.entity.ReviewContext;
@@ -44,6 +45,9 @@ class WebhookControllerTest {
     @Mock
     private CommentResponseService commentResponseService;
 
+    @Mock
+    private ApiKeyService apiKeyService;
+
     @InjectMocks
     private WebhookController webhookController;
 
@@ -81,7 +85,10 @@ class WebhookControllerTest {
                 .review("Test review content")
                 .build();
 
+        when(apiKeyService.resolveApiKeyByRepositoryId(TEST_REPOSITORY_ID))
+                .thenReturn("sk-ant-api03-test-key");
         when(prReviewService.reviewPullRequest(
+                eq("sk-ant-api03-test-key"),
                 eq(TEST_REPOSITORY_ID),
                 eq(TEST_REPO_FULL_NAME),
                 eq(TEST_PR_NUMBER),
@@ -102,15 +109,17 @@ class WebhookControllerTest {
         // then
         assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
         assertThat(response.getBody()).contains("Review completed for PR #1");
+        verify(apiKeyService).resolveApiKeyByRepositoryId(TEST_REPOSITORY_ID);
         verify(prReviewService).reviewPullRequest(
-                TEST_REPOSITORY_ID,
-                TEST_REPO_FULL_NAME,
-                TEST_PR_NUMBER,
-                "Test PR",
-                "Test PR body",
-                "main",
-                "feature",
-                "abc123"
+                eq("sk-ant-api03-test-key"),
+                eq(TEST_REPOSITORY_ID),
+                eq(TEST_REPO_FULL_NAME),
+                eq(TEST_PR_NUMBER),
+                eq("Test PR"),
+                eq("Test PR body"),
+                eq("main"),
+                eq("feature"),
+                eq("abc123")
         );
     }
 
@@ -242,11 +251,13 @@ class WebhookControllerTest {
                 .botCommentIds("[]")
                 .build();
 
+        when(apiKeyService.resolveApiKeyByRepositoryId(TEST_REPOSITORY_ID))
+                .thenReturn("sk-ant-api03-test-key");
         when(reviewContextService.isBotComment(TEST_REPOSITORY_ID, TEST_PR_NUMBER, inReplyToId))
                 .thenReturn(true);
         when(reviewContextService.countBotReplies(TEST_REPOSITORY_ID, TEST_PR_NUMBER))
                 .thenReturn(3);
-        when(commentResponseService.generateResponse(TEST_REPOSITORY_ID, TEST_PR_NUMBER, "질문입니다"))
+        when(commentResponseService.generateResponse(eq("sk-ant-api03-test-key"), eq(TEST_REPOSITORY_ID), eq(TEST_PR_NUMBER), eq("질문입니다")))
                 .thenReturn(Optional.of("답변입니다"));
         when(gitHubReviewClient.replyToReviewComment(TEST_REPO_FULL_NAME, TEST_PR_NUMBER, commentId, "답변입니다"))
                 .thenReturn(600L);
@@ -263,7 +274,8 @@ class WebhookControllerTest {
         // then
         assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
         assertThat(response.getBody()).isEqualTo("Reply posted successfully");
-        verify(commentResponseService).generateResponse(TEST_REPOSITORY_ID, TEST_PR_NUMBER, "질문입니다");
+        verify(apiKeyService).resolveApiKeyByRepositoryId(TEST_REPOSITORY_ID);
+        verify(commentResponseService).generateResponse(eq("sk-ant-api03-test-key"), eq(TEST_REPOSITORY_ID), eq(TEST_PR_NUMBER), eq("질문입니다"));
         verify(gitHubReviewClient).replyToReviewComment(TEST_REPO_FULL_NAME, TEST_PR_NUMBER, commentId, "답변입니다");
         verify(reviewContextService).addBotCommentId(TEST_REPOSITORY_ID, TEST_PR_NUMBER, "TEST_FEATURE", 600L);
     }
@@ -303,7 +315,86 @@ class WebhookControllerTest {
         // then
         assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
         assertThat(response.getBody()).isEqualTo("Bot reply limit reached");
-        verify(commentResponseService, never()).generateResponse(anyLong(), anyInt(), anyString());
+        verify(commentResponseService, never()).generateResponse(any(), anyLong(), anyInt(), anyString());
+        verify(gitHubReviewClient, never()).replyToReviewComment(anyString(), anyInt(), anyLong(), anyString());
+    }
+
+    @Test
+    @DisplayName("handleWebhookEvent_PR_API키미설정_코멘트작성")
+    void handleWebhookEvent_PR_API키미설정_코멘트작성() throws Exception {
+        // given
+        WebhookPayload payload = WebhookPayload.builder()
+                .action("opened")
+                .pullRequest(testPullRequest)
+                .repository(testRepository)
+                .build();
+
+        when(apiKeyService.resolveApiKeyByRepositoryId(TEST_REPOSITORY_ID))
+                .thenReturn(null);
+        when(gitHubReviewClient.createSimpleComment(
+                eq(TEST_REPO_FULL_NAME),
+                eq(TEST_PR_NUMBER),
+                contains("API Key가 설정되지 않았습니다")
+        )).thenReturn(List.of(999L));
+
+        // when
+        ResponseEntity<String> response = webhookController.handleWebhookEvent(
+                TEST_DELIVERY_ID,
+                "pull_request",
+                payload
+        );
+
+        // then
+        assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
+        assertThat(response.getBody()).isEqualTo("API Key not configured");
+        verify(apiKeyService).resolveApiKeyByRepositoryId(TEST_REPOSITORY_ID);
+        verify(gitHubReviewClient).createSimpleComment(
+                eq(TEST_REPO_FULL_NAME),
+                eq(TEST_PR_NUMBER),
+                contains("API Key가 설정되지 않았습니다")
+        );
+        verify(prReviewService, never()).reviewPullRequest(any(), anyLong(), anyString(), anyInt(), anyString(), anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("handleWebhookEvent_Comment_API키미설정_스킵")
+    void handleWebhookEvent_Comment_API키미설정_스킵() throws Exception {
+        // given
+        WebhookPayload payload = WebhookPayload.builder()
+                .action("created")
+                .pullRequest(testPullRequest)
+                .repository(testRepository)
+                .comment(WebhookPayload.Comment.builder()
+                        .id(500L)
+                        .body("질문입니다")
+                        .user(WebhookPayload.User.builder()
+                                .login("developer")
+                                .type("User")
+                                .build())
+                        .inReplyToId(100L)
+                        .path("src/A.java")
+                        .build())
+                .build();
+
+        when(reviewContextService.isBotComment(TEST_REPOSITORY_ID, TEST_PR_NUMBER, 100L))
+                .thenReturn(true);
+        when(reviewContextService.countBotReplies(TEST_REPOSITORY_ID, TEST_PR_NUMBER))
+                .thenReturn(3);
+        when(apiKeyService.resolveApiKeyByRepositoryId(TEST_REPOSITORY_ID))
+                .thenReturn(null);
+
+        // when
+        ResponseEntity<String> response = webhookController.handleWebhookEvent(
+                TEST_DELIVERY_ID,
+                "pull_request_review_comment",
+                payload
+        );
+
+        // then
+        assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
+        assertThat(response.getBody()).isEqualTo("API Key not configured");
+        verify(apiKeyService).resolveApiKeyByRepositoryId(TEST_REPOSITORY_ID);
+        verify(commentResponseService, never()).generateResponse(any(), anyLong(), anyInt(), anyString());
         verify(gitHubReviewClient, never()).replyToReviewComment(anyString(), anyInt(), anyLong(), anyString());
     }
 }

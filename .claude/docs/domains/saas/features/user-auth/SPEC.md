@@ -543,16 +543,16 @@ Webhook 수신 → repository_id로 user_id 매핑
 
 ## 완료 조건
 
-- [ ] `build.gradle`에 Spring Security + OAuth2 의존성 추가
-- [ ] `application.yml`에 GitHub OAuth 설정 추가 + `ANTHROPIC_API_KEY` 제거
-- [ ] `users` 테이블 생성 (role, github_token, anthropic_api_key 암호화 컬럼 포함)
-- [ ] 기존 테이블 (`repositories`, `feature_memory`, `review_context`)에 `user_id` 외래키 추가
-- [ ] `SecurityConfig.java` 구현 (CSRF 비활성화, Webhook 경로 제외)
-- [ ] `CustomOAuth2UserService.java` 구현 (첫 가입자 `ADMIN` 처리, 익명 데이터 마이그레이션)
-- [ ] `EncryptionService.java` 구현 (AES-256-GCM 또는 TextEncryptor)
-- [ ] `ApiKeyService.java` 구현 (저장/조회/삭제 + 유효성 검증)
-- [ ] API Key 관리 API 3개 (`GET/PUT/DELETE /api/settings/api-key`)
-- [ ] Webhook에서 API Key 미설정 사용자 스킵 + PR 코멘트 안내
-- [ ] 단위 테스트 10개 이상 (OAuth 플로우, 암호화, 역할 부여, API Key 관리)
-- [ ] 통합 테스트 6개 이상 (인증 필터, 세션 관리, API Key CRUD)
-- [ ] 환경변수 문서화 (`GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`, `ENCRYPTION_SECRET_KEY`)
+- [x] `build.gradle`에 Spring Security + OAuth2 의존성 추가
+- [x] `application.yml`에 GitHub OAuth 설정 추가 + `ANTHROPIC_API_KEY` 제거
+- [x] `users` 테이블 생성 (role, github_token, anthropic_api_key 암호화 컬럼 포함)
+- [x] 기존 테이블 (`repositories`, `feature_memory`, `review_context`)에 `user_id` 외래키 추가
+- [x] `SecurityConfig.java` 구현 (CSRF 비활성화, Webhook 경로 제외)
+- [x] `CustomOAuth2UserService.java` 구현 (첫 가입자 `ADMIN` 처리, 익명 데이터 마이그레이션)
+- [x] `EncryptionService.java` 구현 (AES-256-GCM 또는 TextEncryptor)
+- [x] `ApiKeyService.java` 구현 (저장/조회/삭제 + 유효성 검증)
+- [x] API Key 관리 API 3개 (`GET/PUT/DELETE /api/settings/api-key`)
+- [x] Webhook에서 API Key 미설정 사용자 스킵 + PR 코멘트 안내
+- [x] 단위 테스트 10개 이상 (OAuth 플로우, 암호화, 역할 부여, API Key 관리)
+- [x] 통합 테스트 6개 이상 (인증 필터, 세션 관리, API Key CRUD)
+- [x] 환경변수 문서화 (`GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`, `ENCRYPTION_SECRET_KEY`)

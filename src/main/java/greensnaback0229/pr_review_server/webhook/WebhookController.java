@@ -1,6 +1,7 @@
 package greensnaback0229.pr_review_server.webhook;
 
 import greensnaback0229.pr_review_server.aggregator.dto.AggregatedReview;
+import greensnaback0229.pr_review_server.auth.ApiKeyService;
 import greensnaback0229.pr_review_server.comment.CommentResponseService;
 import greensnaback0229.pr_review_server.comment.ReviewContextService;
 import greensnaback0229.pr_review_server.github.GitHubReviewClient;
@@ -33,6 +34,7 @@ public class WebhookController {
     private final GitHubReviewClient gitHubReviewClient;
     private final ReviewContextService reviewContextService;
     private final CommentResponseService commentResponseService;
+    private final ApiKeyService apiKeyService;
 
     /**
      * 처리된 webhook delivery ID를 추적하는 Set (중복 이벤트 방지)
@@ -94,9 +96,22 @@ public class WebhookController {
 
             log.info("Processing PR: {}/#{} - {} (repositoryId={})", repoFullName, prNumber, prTitle, repositoryId);
 
+            // API Key 확인
+            String apiKey = apiKeyService.resolveApiKeyByRepositoryId(repositoryId);
+            if (apiKey == null) {
+                log.warn("API Key not configured for repository {} ({})", repoFullName, repositoryId);
+                try {
+                    gitHubReviewClient.createSimpleComment(repoFullName, prNumber,
+                            "⚠️ API Key가 설정되지 않았습니다. 리뷰를 수행하려면 설정 페이지에서 Anthropic API Key를 등록해주세요.");
+                } catch (Exception e) {
+                    log.error("Failed to post API key missing comment: {}", e.getMessage());
+                }
+                return ResponseEntity.ok("API Key not configured");
+            }
+
             // 리뷰 수행
             List<AggregatedReview> reviews = prReviewService.reviewPullRequest(
-                    repositoryId, repoFullName, prNumber, prTitle, prBody, baseBranch, headBranch, headSha);
+                    apiKey, repositoryId, repoFullName, prNumber, prTitle, prBody, baseBranch, headBranch, headSha);
 
             if (reviews.isEmpty()) {
                 log.warn("No reviews generated for {}/#{}", repoFullName, prNumber);
@@ -171,25 +186,32 @@ public class WebhookController {
                 return ResponseEntity.ok("Bot reply limit reached");
             }
 
+            // 5. API Key 확인
+            String apiKey = apiKeyService.resolveApiKeyByRepositoryId(repositoryId);
+            if (apiKey == null) {
+                log.warn("API Key not configured for repository {}", repositoryId);
+                return ResponseEntity.ok("API Key not configured");
+            }
+
             log.info("Processing bot reply: {}/#{} commentId={}, in_reply_to={}, path={}",
                     repoFullName, prNumber, comment.getId(), inReplyToId, comment.getPath());
 
-            // 5. 댓글 파일 경로로 해당 Feature 컨텍스트 조회 + 응답 생성
+            // 6. 댓글 파일 경로로 해당 Feature 컨텍스트 조회 + 응답 생성
             Optional<String> responseOpt = commentResponseService.generateResponse(
-                    repositoryId, prNumber, comment.getBody());
+                    apiKey, repositoryId, prNumber, comment.getBody());
 
             if (responseOpt.isEmpty()) {
                 log.warn("No response generated for comment on {}/#{}", repoFullName, prNumber);
                 return ResponseEntity.ok("No response generated");
             }
 
-            // 6. GitHub 스레드에 답글 게시
+            // 7. GitHub 스레드에 답글 게시
             String responseText = responseOpt.get();
             try {
                 long newCommentId = gitHubReviewClient.replyToReviewComment(
                         repoFullName, prNumber, comment.getId(), responseText);
 
-                // 7. 새 봇 코멘트 ID를 review_context에 추가 (다중 턴 지원)
+                // 8. 새 봇 코멘트 ID를 review_context에 추가 (다중 턴 지원)
                 Optional<greensnaback0229.pr_review_server.comment.entity.ReviewContext> contextOpt =
                         reviewContextService.findByCommentPath(repositoryId, prNumber, comment.getPath());
                 if (contextOpt.isPresent()) {

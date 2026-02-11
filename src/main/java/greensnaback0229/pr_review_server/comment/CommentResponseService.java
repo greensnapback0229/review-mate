@@ -25,12 +25,13 @@ public class CommentResponseService {
     /**
      * PR 코멘트에 대한 응답 생성
      *
+     * @param apiKey Anthropic API 키
      * @param repositoryId 저장소 ID
      * @param prNumber PR 번호
      * @param commentBody 코멘트 내용
      * @return 생성된 응답 (없으면 empty)
      */
-    public Optional<String> generateResponse(Long repositoryId, int prNumber, String commentBody) {
+    public Optional<String> generateResponse(String apiKey, Long repositoryId, int prNumber, String commentBody) {
         try {
             log.info("Generating response for comment on PR {}/#{}", repositoryId, prNumber);
 
@@ -50,7 +51,7 @@ public class CommentResponseService {
             log.debug("User prompt length: {}", userPrompt.length());
 
             // 3. LLM 호출
-            String response = llmClient.generateCommentResponse(systemPrompt, userPrompt);
+            String response = llmClient.generateCommentResponse(apiKey, systemPrompt, userPrompt);
 
             if (response == null || response.trim().isEmpty()) {
                 log.warn("LLM returned empty response");

@@ -1,10 +1,7 @@
 package greensnaback0229.pr_review_server.feature.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.time.LocalDateTime;
 
@@ -19,6 +16,10 @@ public class Repository {
     @Id
     @Column(name = "repository_id")
     private Long repositoryId;
+
+    @Setter
+    @Column(name = "user_id")
+    private Long userId;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
