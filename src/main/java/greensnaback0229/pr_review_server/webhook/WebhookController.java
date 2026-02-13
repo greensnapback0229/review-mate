@@ -5,6 +5,8 @@ import greensnaback0229.pr_review_server.auth.ApiKeyService;
 import greensnaback0229.pr_review_server.comment.CommentResponseService;
 import greensnaback0229.pr_review_server.comment.ReviewContextService;
 import greensnaback0229.pr_review_server.github.GitHubReviewClient;
+import greensnaback0229.pr_review_server.installation.InstallationHandler;
+import greensnaback0229.pr_review_server.installation.dto.InstallationWebhookPayload;
 import greensnaback0229.pr_review_server.llm.dto.InlineComment;
 import greensnaback0229.pr_review_server.tenant.TenantContext;
 import greensnaback0229.pr_review_server.tenant.UserRepositoryService;
@@ -38,6 +40,7 @@ public class WebhookController {
     private final CommentResponseService commentResponseService;
     private final ApiKeyService apiKeyService;
     private final UserRepositoryService userRepositoryService;
+    private final InstallationHandler installationHandler;
 
     /**
      * 처리된 webhook delivery ID를 추적하는 Set (중복 이벤트 방지)
@@ -308,6 +311,39 @@ public class WebhookController {
 
     private boolean isReviewableAction(String action) {
         return "opened".equals(action) || "synchronize".equals(action);
+    }
+
+    /**
+     * GitHub App Installation Webhook 엔드포인트
+     * installation (created/deleted) 및 installation_repositories (added/removed) 이벤트 처리
+     */
+    @PostMapping("/github/installation")
+    public ResponseEntity<String> handleInstallationEvent(
+            @RequestHeader(value = "X-GitHub-Event", required = false) String eventType,
+            @RequestBody InstallationWebhookPayload payload) {
+
+        log.info("Received installation webhook: event={}, action={}", eventType, payload.getAction());
+
+        try {
+            if ("installation".equals(eventType)) {
+                if ("created".equals(payload.getAction())) {
+                    installationHandler.handleCreated(payload);
+                } else if ("deleted".equals(payload.getAction())) {
+                    installationHandler.handleDeleted(payload);
+                }
+            } else if ("installation_repositories".equals(eventType)) {
+                if ("added".equals(payload.getAction())) {
+                    installationHandler.handleRepositoriesAdded(payload);
+                } else if ("removed".equals(payload.getAction())) {
+                    installationHandler.handleRepositoriesRemoved(payload);
+                }
+            }
+
+            return ResponseEntity.ok("Installation event processed");
+        } catch (Exception e) {
+            log.error("Failed to process installation webhook: {}", e.getMessage(), e);
+            return ResponseEntity.ok("Installation event processing failed");
+        }
     }
 
     @GetMapping("/health")

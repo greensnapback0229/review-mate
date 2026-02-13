@@ -5,6 +5,9 @@ import greensnaback0229.pr_review_server.auth.repository.UserJpaRepository;
 import greensnaback0229.pr_review_server.comment.repository.ReviewContextJpaRepository;
 import greensnaback0229.pr_review_server.feature.repository.FeatureMemoryJpaRepository;
 import greensnaback0229.pr_review_server.feature.repository.RepositoryJpaRepository;
+import greensnaback0229.pr_review_server.installation.InstallationHandler;
+import greensnaback0229.pr_review_server.installation.entity.PendingInstallation;
+import greensnaback0229.pr_review_server.installation.repository.PendingInstallationJpaRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.oauth2.client.userinfo.DefaultOAuth2UserService;
@@ -14,6 +17,7 @@ import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -26,6 +30,8 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
     private final RepositoryJpaRepository repositoryJpaRepository;
     private final FeatureMemoryJpaRepository featureMemoryJpaRepository;
     private final ReviewContextJpaRepository reviewContextJpaRepository;
+    private final PendingInstallationJpaRepository pendingInstallationJpaRepository;
+    private final InstallationHandler installationHandler;
 
     @Override
     @Transactional
@@ -72,8 +78,22 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
             migrateAnonymousData(user.getId());
         }
 
+        // F12: pending_installations → user_repositories 자동 연결
+        convertPendingInstallations(githubId, user.getId());
+
         log.info("OAuth2 login: githubId={}, login={}, role={}", githubId, login, user.getRole());
         return new CustomOAuth2User(user, attributes);
+    }
+
+    private void convertPendingInstallations(Long githubId, Long userId) {
+        List<PendingInstallation> pendings = pendingInstallationJpaRepository.findByGithubId(githubId);
+        if (!pendings.isEmpty()) {
+            for (PendingInstallation pending : pendings) {
+                installationHandler.convertPendingToActive(userId, pending);
+            }
+            pendingInstallationJpaRepository.deleteAll(pendings);
+            log.info("Converted {} pending installations for userId={}", pendings.size(), userId);
+        }
     }
 
     private void migrateAnonymousData(Long userId) {
