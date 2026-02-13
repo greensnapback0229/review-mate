@@ -9,6 +9,8 @@ import greensnaback0229.pr_review_server.comment.dto.FileContextData;
 import greensnaback0229.pr_review_server.comment.entity.ReviewContext;
 import greensnaback0229.pr_review_server.comment.repository.ReviewContextJpaRepository;
 import greensnaback0229.pr_review_server.llm.dto.InlineComment;
+import greensnaback0229.pr_review_server.tenant.TenantContext;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -31,6 +33,7 @@ import static org.mockito.Mockito.*;
 @DisplayName("ReviewContextService 테스트")
 class ReviewContextServiceTest {
 
+    private static final Long TEST_USER_ID = 42L;
     private static final Long TEST_REPOSITORY_ID = 123L;
     private static final int TEST_PR_NUMBER = 1;
     private static final String TEST_FEATURE_NAME = "PAYMENT";
@@ -47,7 +50,12 @@ class ReviewContextServiceTest {
 
     @BeforeEach
     void setUp() {
-        // 테스트 준비
+        TenantContext.setCurrentUserId(TEST_USER_ID);
+    }
+
+    @AfterEach
+    void tearDown() {
+        TenantContext.clear();
     }
 
     @Test
@@ -77,8 +85,8 @@ class ReviewContextServiceTest {
                 .inlineComments(Arrays.asList(inlineComment))
                 .build();
 
-        when(reviewContextJpaRepository.findByRepositoryIdAndPrNumberAndFeatureName(
-                TEST_REPOSITORY_ID, TEST_PR_NUMBER, TEST_FEATURE_NAME))
+        when(reviewContextJpaRepository.findByRepositoryIdAndPrNumberAndFeatureNameAndUserId(
+                TEST_REPOSITORY_ID, TEST_PR_NUMBER, TEST_FEATURE_NAME, TEST_USER_ID))
                 .thenReturn(Optional.empty());
 
         // when
@@ -97,6 +105,7 @@ class ReviewContextServiceTest {
         assertThat(saved.getHeadSha()).isEqualTo(TEST_HEAD_SHA);
         assertThat(saved.getGeneralReview()).isEqualTo("전체 리뷰 내용");
         assertThat(saved.getBotCommentIds()).isEqualTo("[]");
+        assertThat(saved.getUserId()).isEqualTo(TEST_USER_ID);
 
         // JSON 필드 검증
         List<FileContextData> fileContexts = objectMapper.readValue(
@@ -139,8 +148,8 @@ class ReviewContextServiceTest {
                 .inlineComments(Arrays.asList())
                 .build();
 
-        when(reviewContextJpaRepository.findByRepositoryIdAndPrNumberAndFeatureName(
-                TEST_REPOSITORY_ID, TEST_PR_NUMBER, TEST_FEATURE_NAME))
+        when(reviewContextJpaRepository.findByRepositoryIdAndPrNumberAndFeatureNameAndUserId(
+                TEST_REPOSITORY_ID, TEST_PR_NUMBER, TEST_FEATURE_NAME, TEST_USER_ID))
                 .thenReturn(Optional.of(existingContext));
 
         // when
@@ -175,7 +184,7 @@ class ReviewContextServiceTest {
                 .botCommentIds("[100, 200]")
                 .build();
 
-        when(reviewContextJpaRepository.findByRepositoryIdAndPrNumber(TEST_REPOSITORY_ID, TEST_PR_NUMBER))
+        when(reviewContextJpaRepository.findByRepositoryIdAndPrNumberAndUserId(TEST_REPOSITORY_ID, TEST_PR_NUMBER, TEST_USER_ID))
                 .thenReturn(Arrays.asList(context));
 
         List<Long> newCommentIds = Arrays.asList(300L, 400L);
@@ -209,7 +218,7 @@ class ReviewContextServiceTest {
                 .botCommentIds("[100, 200, 300]")
                 .build();
 
-        when(reviewContextJpaRepository.findByRepositoryIdAndPrNumber(TEST_REPOSITORY_ID, TEST_PR_NUMBER))
+        when(reviewContextJpaRepository.findByRepositoryIdAndPrNumberAndUserId(TEST_REPOSITORY_ID, TEST_PR_NUMBER, TEST_USER_ID))
                 .thenReturn(Arrays.asList(context));
 
         // when
@@ -235,7 +244,7 @@ class ReviewContextServiceTest {
                 .botCommentIds("[100, 200]")
                 .build();
 
-        when(reviewContextJpaRepository.findByRepositoryIdAndPrNumber(TEST_REPOSITORY_ID, TEST_PR_NUMBER))
+        when(reviewContextJpaRepository.findByRepositoryIdAndPrNumberAndUserId(TEST_REPOSITORY_ID, TEST_PR_NUMBER, TEST_USER_ID))
                 .thenReturn(Arrays.asList(context));
 
         // when
@@ -273,7 +282,7 @@ class ReviewContextServiceTest {
                 .botCommentIds("[300, 400, 500]")
                 .build();
 
-        when(reviewContextJpaRepository.findByRepositoryIdAndPrNumber(TEST_REPOSITORY_ID, TEST_PR_NUMBER))
+        when(reviewContextJpaRepository.findByRepositoryIdAndPrNumberAndUserId(TEST_REPOSITORY_ID, TEST_PR_NUMBER, TEST_USER_ID))
                 .thenReturn(Arrays.asList(context1, context2));
 
         // when
@@ -299,8 +308,8 @@ class ReviewContextServiceTest {
                 .botCommentIds("[100]")
                 .build();
 
-        when(reviewContextJpaRepository.findByRepositoryIdAndPrNumberAndFeatureName(
-                TEST_REPOSITORY_ID, TEST_PR_NUMBER, TEST_FEATURE_NAME))
+        when(reviewContextJpaRepository.findByRepositoryIdAndPrNumberAndFeatureNameAndUserId(
+                TEST_REPOSITORY_ID, TEST_PR_NUMBER, TEST_FEATURE_NAME, TEST_USER_ID))
                 .thenReturn(Optional.of(context));
 
         // when
@@ -357,7 +366,7 @@ class ReviewContextServiceTest {
                 .botCommentIds("[]")
                 .build();
 
-        when(reviewContextJpaRepository.findByRepositoryIdAndPrNumber(TEST_REPOSITORY_ID, TEST_PR_NUMBER))
+        when(reviewContextJpaRepository.findByRepositoryIdAndPrNumberAndUserId(TEST_REPOSITORY_ID, TEST_PR_NUMBER, TEST_USER_ID))
                 .thenReturn(Arrays.asList(context1, context2));
 
         // when
@@ -392,7 +401,7 @@ class ReviewContextServiceTest {
                 .botCommentIds("[]")
                 .build();
 
-        when(reviewContextJpaRepository.findByRepositoryIdAndPrNumber(TEST_REPOSITORY_ID, TEST_PR_NUMBER))
+        when(reviewContextJpaRepository.findByRepositoryIdAndPrNumberAndUserId(TEST_REPOSITORY_ID, TEST_PR_NUMBER, TEST_USER_ID))
                 .thenReturn(Arrays.asList(context));
 
         // when
