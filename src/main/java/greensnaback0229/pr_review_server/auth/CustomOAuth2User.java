@@ -31,6 +31,10 @@ public class CustomOAuth2User implements OAuth2User {
         return List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole()));
     }
 
+    public Long getUserId() {
+        return user.getId();
+    }
+
     @Override
     public String getName() {
         return user.getGithubLogin();
