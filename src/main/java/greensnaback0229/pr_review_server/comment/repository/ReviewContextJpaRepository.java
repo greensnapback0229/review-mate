@@ -20,6 +20,16 @@ public interface ReviewContextJpaRepository extends JpaRepository<ReviewContext,
 
     boolean existsByRepositoryIdAndPrNumber(Long repositoryId, Integer prNumber);
 
+    // F11: userId 격리 쿼리
+    Optional<ReviewContext> findByRepositoryIdAndPrNumberAndFeatureNameAndUserId(
+            Long repositoryId, Integer prNumber, String featureName, Long userId);
+
+    List<ReviewContext> findByRepositoryIdAndPrNumberAndUserId(
+            Long repositoryId, Integer prNumber, Long userId);
+
+    boolean existsByRepositoryIdAndPrNumberAndUserId(
+            Long repositoryId, Integer prNumber, Long userId);
+
     @Modifying
     @Query("UPDATE ReviewContext rc SET rc.userId = :userId WHERE rc.userId IS NULL")
     int updateUserIdWhereNull(@Param("userId") Long userId);

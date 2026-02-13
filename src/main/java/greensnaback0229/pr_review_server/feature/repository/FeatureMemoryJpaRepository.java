@@ -19,6 +19,13 @@ public interface FeatureMemoryJpaRepository extends JpaRepository<FeatureMemory,
 
     boolean existsByRepositoryIdAndFeatureName(Long repositoryId, String featureName);
 
+    // F11: userId 격리 쿼리
+    List<FeatureMemory> findByRepositoryIdAndUserId(Long repositoryId, Long userId);
+
+    Optional<FeatureMemory> findByRepositoryIdAndFeatureNameAndUserId(Long repositoryId, String featureName, Long userId);
+
+    boolean existsByRepositoryIdAndFeatureNameAndUserId(Long repositoryId, String featureName, Long userId);
+
     @Modifying
     @Query("UPDATE FeatureMemory fm SET fm.userId = :userId WHERE fm.userId IS NULL")
     int updateUserIdWhereNull(@Param("userId") Long userId);
