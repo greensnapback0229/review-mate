@@ -486,15 +486,15 @@ public OAuth2User loadUser(OAuth2UserRequest userRequest) {
 
 ## 완료 조건
 
-- [ ] `pending_installations` 테이블 생성
-- [ ] `/api/webhook/github/installation` 엔드포인트 추가
-- [ ] `InstallationHandler` 구현 (created/deleted/added/removed 처리)
-- [ ] 사용자-Repository 자동 연결 로직 (pending 포함)
-- [ ] `GET /api/repositories` 구현 (목록 조회)
-- [ ] `GET /api/repositories/{id}` 구현 (상세 조회)
-- [ ] `PATCH /api/repositories/{id}` 구현 (토글)
-- [ ] `DELETE /api/repositories/{id}` 구현 (Soft Delete)
-- [ ] F10 연동 (가입 시 pending 자동 연결)
-- [ ] 단위 테스트 6개 이상 (InstallationHandler, RepositoryService)
-- [ ] 통합 테스트 6개 이상 (Webhook 처리, API)
-- [ ] `UserRepositoryRepository` 쿼리 메서드 구현 (user_id 조건 포함)
+- [x] `pending_installations` 테이블 생성
+- [x] `/api/webhook/github/installation` 엔드포인트 추가
+- [x] `InstallationHandler` 구현 (created/deleted/added/removed 처리)
+- [x] 사용자-Repository 자동 연결 로직 (pending 포함)
+- [x] `GET /api/repositories` 구현 (목록 조회)
+- [x] `GET /api/repositories/{id}` 구현 (상세 조회)
+- [x] `PATCH /api/repositories/{id}` 구현 (토글)
+- [x] `DELETE /api/repositories/{id}` 구현 (Soft Delete)
+- [x] F10 연동 (가입 시 pending 자동 연결)
+- [x] 단위 테스트 6개 이상 (InstallationHandler, RepositoryService)
+- [x] 통합 테스트 6개 이상 (Webhook 처리, API)
+- [x] `UserRepositoryRepository` 쿼리 메서드 구현 (user_id 조건 포함)

@@ -5,6 +5,8 @@ import greensnaback0229.pr_review_server.auth.repository.UserJpaRepository;
 import greensnaback0229.pr_review_server.comment.repository.ReviewContextJpaRepository;
 import greensnaback0229.pr_review_server.feature.repository.FeatureMemoryJpaRepository;
 import greensnaback0229.pr_review_server.feature.repository.RepositoryJpaRepository;
+import greensnaback0229.pr_review_server.installation.InstallationHandler;
+import greensnaback0229.pr_review_server.installation.repository.PendingInstallationJpaRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -47,6 +49,12 @@ class CustomOAuth2UserServiceTest {
 
     @Mock
     private ReviewContextJpaRepository reviewContextJpaRepository;
+
+    @Mock
+    private PendingInstallationJpaRepository pendingInstallationJpaRepository;
+
+    @Mock
+    private InstallationHandler installationHandler;
 
     @InjectMocks
     private CustomOAuth2UserService customOAuth2UserService;

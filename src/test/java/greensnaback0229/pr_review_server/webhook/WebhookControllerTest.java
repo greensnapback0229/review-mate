@@ -6,6 +6,7 @@ import greensnaback0229.pr_review_server.comment.CommentResponseService;
 import greensnaback0229.pr_review_server.comment.ReviewContextService;
 import greensnaback0229.pr_review_server.comment.entity.ReviewContext;
 import greensnaback0229.pr_review_server.github.GitHubReviewClient;
+import greensnaback0229.pr_review_server.installation.InstallationHandler;
 import greensnaback0229.pr_review_server.tenant.TenantContext;
 import greensnaback0229.pr_review_server.tenant.UserRepositoryService;
 import greensnaback0229.pr_review_server.webhook.dto.WebhookPayload;
@@ -53,6 +54,9 @@ class WebhookControllerTest {
 
     @Mock
     private UserRepositoryService userRepositoryService;
+
+    @Mock
+    private InstallationHandler installationHandler;
 
     @InjectMocks
     private WebhookController webhookController;
