@@ -1,0 +1,52 @@
+erDiagram
+    users {
+        BIGINT id PK "AUTO_INCREMENT"
+        BIGINT github_id UK "NOT NULL"
+        VARCHAR github_login "NOT NULL"
+        VARCHAR email
+        VARCHAR name
+        VARCHAR avatar_url
+        VARCHAR github_token "NOT NULL, AES 암호화"
+        VARCHAR anthropic_api_key "AES 암호화, NULL 허용"
+        VARCHAR role "ADMIN or USER"
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+
+    repository {
+        BIGINT repository_id PK "GitHub Repository ID"
+        BIGINT user_id FK "NULL 허용"
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+
+    feature_memory {
+        BIGINT feature_memory_id PK "AUTO_INCREMENT"
+        BIGINT repository_id FK "NOT NULL"
+        BIGINT user_id FK "NULL 허용"
+        VARCHAR feature_name "NOT NULL"
+        JSON feature_memory "NOT NULL"
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+
+    review_context {
+        BIGINT id PK "AUTO_INCREMENT"
+        BIGINT repository_id "NOT NULL"
+        BIGINT user_id FK "NULL 허용"
+        INT pr_number "NOT NULL"
+        VARCHAR feature_name "NOT NULL"
+        VARCHAR head_sha "NOT NULL"
+        JSON file_contexts "NOT NULL"
+        TEXT general_review
+        JSON inline_comments
+        JSON bot_comment_ids "NOT NULL"
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+
+    users ||--o{ repository : "owns (1:N, user_id)"
+    repository ||--o{ feature_memory : "has (1:N)"
+    users ||--o{ feature_memory : "owns (1:N, user_id)"
+    repository ||--o{ review_context : "has (1:N, logical)"
+    users ||--o{ review_context : "owns (1:N, user_id)"

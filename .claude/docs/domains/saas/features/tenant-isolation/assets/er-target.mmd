@@ -1,0 +1,65 @@
+erDiagram
+    users {
+        BIGINT id PK "AUTO_INCREMENT"
+        BIGINT github_id UK "NOT NULL"
+        VARCHAR github_login "NOT NULL"
+        VARCHAR email
+        VARCHAR name
+        VARCHAR avatar_url
+        VARCHAR github_token "NOT NULL, AES 암호화"
+        VARCHAR anthropic_api_key "AES 암호화, NULL 허용"
+        VARCHAR role "ADMIN or USER"
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+
+    user_repositories {
+        BIGINT id PK "AUTO_INCREMENT"
+        BIGINT user_id FK "NOT NULL"
+        BIGINT repository_id FK "NOT NULL"
+        VARCHAR repo_full_name "NOT NULL"
+        BIGINT installation_id "선택"
+        BOOLEAN is_active "DEFAULT TRUE"
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+
+    repository {
+        BIGINT repository_id PK "GitHub Repository ID"
+        BIGINT user_id FK "레거시, 점진적 제거"
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+
+    feature_memory {
+        BIGINT feature_memory_id PK "AUTO_INCREMENT"
+        BIGINT repository_id FK "NOT NULL"
+        BIGINT user_id FK "NOT NULL, 격리 필수"
+        VARCHAR feature_name "NOT NULL"
+        JSON feature_memory "NOT NULL"
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+
+    review_context {
+        BIGINT id PK "AUTO_INCREMENT"
+        BIGINT repository_id "NOT NULL"
+        BIGINT user_id FK "NOT NULL, 격리 필수"
+        INT pr_number "NOT NULL"
+        VARCHAR feature_name "NOT NULL"
+        VARCHAR head_sha "NOT NULL"
+        JSON file_contexts "NOT NULL"
+        TEXT general_review
+        JSON inline_comments
+        JSON bot_comment_ids "NOT NULL"
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+
+    users ||--o{ user_repositories : "registers (1:N)"
+    repository ||--o{ user_repositories : "linked (1:N)"
+    users ||--o{ repository : "legacy owner (1:N)"
+    repository ||--o{ feature_memory : "has (1:N)"
+    users ||--o{ feature_memory : "isolated (1:N)"
+    repository ||--o{ review_context : "has (1:N)"
+    users ||--o{ review_context : "isolated (1:N)"

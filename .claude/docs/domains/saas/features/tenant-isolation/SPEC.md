@@ -59,16 +59,39 @@ sequenceDiagram
 3. **JPA Repository**: 모든 쿼리에 `user_id` 조건 명시 (`@Query` 또는 메서드 파라미터)
 4. **요청 종료**: `finally` 블록에서 `TenantContext.clear()` (ThreadLocal 메모리 누수 방지)
 
+## Entity 매핑 관계도
+
+### 현재 상태 (F10 완료 후)
+
+![현재 Entity 관계도](assets/er-current.png)
+
+**현재 문제점**:
+- `repository.user_id`는 **1:1** 소유자 관계 → 하나의 Repository에 한 명만 연결 가능
+- JPA 쿼리에 `user_id` 조건 없음 → 다른 사용자 데이터 접근 가능
+- `review_context.repository_id`는 FK 제약 없이 논리적 참조만 존재
+
+### F11 적용 후 (목표 상태)
+
+![F11 목표 Entity 관계도](assets/er-target.png)
+
+**핵심 변경**:
+- `user_repositories` N:N 연결 테이블 신규 → Webhook에서 다중 사용자 매핑
+- 모든 JPA 쿼리에 `AND user_id = ?` 조건 추가 → 데이터 격리
+- `TenantContext` (ThreadLocal) → 요청 전체에 userId 전파
+- `TenantFilter` → 인증된 요청에서 자동으로 TenantContext 설정
+
 ## 범위 정의
 
 ### In-Scope
-- 기존 테이블에 `user_id` 컬럼 추가 (`repositories`, `feature_memory`, `review_context`)
+- ~~기존 테이블에 `user_id` 컬럼 추가~~ → **F10에서 완료** (`repository`, `feature_memory`, `review_context` 모두 `user_id` 컬럼 존재, NULL 허용)
+- ~~기존 익명 데이터 마이그레이션~~ → **F10에서 완료** (`CustomOAuth2UserService.migrateAnonymousData()`로 첫 가입자에게 귀속)
 - `user_repositories` 연결 테이블 생성 (사용자 ↔ Repository N:N 관계)
+- `CustomOAuth2User`에 `getUserId()` 편의 메서드 추가 (현재 `getUser().getId()`로만 접근 가능)
 - `TenantContext` (ThreadLocal) 구현
 - `TenantFilter` (Spring Security Filter) 구현
 - 모든 JPA Repository 쿼리에 `user_id` 조건 추가
-- Webhook 처리 시 `repository_id` → `user_id` 매핑 로직
-- 기존 익명 데이터 마이그레이션 (F10의 첫 가입자에게 귀속)
+- Webhook 처리 시 `repository_id` → `user_id` 매핑을 `user_repositories` 기반으로 전환 (현재는 `Repository.userId` 1:1 조회)
+- 복합 인덱스 생성 (`user_id` + 기존 조건)
 
 ### Out-of-Scope
 - Row-Level Security (PostgreSQL RLS 등 DB 레벨 격리)
@@ -97,7 +120,7 @@ sequenceDiagram
 2. **Webhook 처리는 다중 사용자 반복**: 하나의 Repository에 여러 사용자가 연결된 경우, 각 사용자별로 독립적으로 처리
 3. **매핑 없는 Repository는 무시**: `user_repositories`에 없는 Repository의 Webhook은 경고 로그 후 무시
 4. **TenantContext는 요청 종료 시 반드시 정리**: `finally` 블록에서 `clear()` 호출 (ThreadLocal 메모리 누수 방지)
-5. **기존 익명 데이터는 레거시 모드 지원**: `user_id IS NULL`인 데이터는 마이그레이션 전까지 전역 접근 허용 (과도기)
+5. **마이그레이션 후 엄격 격리**: F10의 `CustomOAuth2UserService.migrateAnonymousData()`가 첫 가입 시 모든 `user_id IS NULL` 데이터를 마이그레이션하므로, F11에서는 `WHERE user_id = ?` 엄격 격리만 적용 (OR NULL 허용 안 함)
 6. **Webhook 경로는 TenantFilter 제외**: `/api/webhook/**`는 인증 필터와 동일하게 제외
 
 ## 상세 설계
@@ -123,43 +146,24 @@ CREATE TABLE user_repositories (
 );
 ```
 
-#### 기존 테이블 마이그레이션 (user_id 추가)
+#### 기존 테이블 현황 (F10에서 완료된 작업)
 
-**1. repositories 테이블** (F10에서 이미 추가됨):
+> **아래 3개 작업은 F10에서 이미 완료됨. F11에서는 추가 DDL 불필요.**
+
+| 테이블 | `user_id` 컬럼 | Entity 필드 | 마이그레이션 메서드 | 상태 |
+|--------|---------------|-------------|-------------------|------|
+| `repository` | `@Column(name="user_id")` NULL 허용 | `Repository.userId` | `RepositoryJpaRepository.updateUserIdWhereNull()` | F10 완료 |
+| `feature_memory` | `@Column(name="user_id")` NULL 허용 | `FeatureMemory.userId` | `FeatureMemoryJpaRepository.updateUserIdWhereNull()` | F10 완료 |
+| `review_context` | `@Column(name="user_id")` NULL 허용 | `ReviewContext.userId` | `ReviewContextJpaRepository.updateUserIdWhereNull()` | F10 완료 |
+
+- 마이그레이션은 `CustomOAuth2UserService.migrateAnonymousData(userId)`에서 첫 가입 시 자동 실행
+
+#### F11에서 추가할 인덱스
+
 ```sql
--- F10에서 이미 추가됨 (확인용)
--- ALTER TABLE repositories
--- ADD COLUMN user_id BIGINT NULL,
--- ADD CONSTRAINT fk_repository_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL;
-```
-
-**2. feature_memory 테이블**:
-```sql
-ALTER TABLE feature_memory
-ADD COLUMN user_id BIGINT NULL,
-ADD CONSTRAINT fk_feature_memory_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL;
-
--- 복합 인덱스 추가 (user_id + repository_id + feature_name)
+-- 복합 인덱스 (user_id 기반 격리 쿼리 성능)
 CREATE INDEX idx_feature_memory_user_repo_feature ON feature_memory(user_id, repository_id, feature_name);
-```
-
-**3. review_context 테이블**:
-```sql
-ALTER TABLE review_context
-ADD COLUMN user_id BIGINT NULL,
-ADD CONSTRAINT fk_review_context_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL;
-
--- 복합 인덱스 추가 (user_id + repository_id + pr_number)
 CREATE INDEX idx_review_context_user_repo_pr ON review_context(user_id, repository_id, pr_number);
-```
-
-**기존 데이터 마이그레이션**:
-```sql
--- F10의 첫 가입자(ADMIN)에게 모든 익명 데이터 귀속
--- 실행은 CustomOAuth2UserService.migrateAnonymousData()에서 처리
-UPDATE repositories SET user_id = ? WHERE user_id IS NULL;
-UPDATE feature_memory SET user_id = ? WHERE user_id IS NULL;
-UPDATE review_context SET user_id = ? WHERE user_id IS NULL;
 ```
 
 ### TenantContext (ThreadLocal 기반)
@@ -257,8 +261,10 @@ public class TenantFilter implements Filter {
 
     private Long extractUserId(Authentication auth) {
         Object principal = auth.getPrincipal();
-        if (principal instanceof CustomOAuth2User) {
-            return ((CustomOAuth2User) principal).getUserId();
+        if (principal instanceof CustomOAuth2User oAuth2User) {
+            // F10 현재: getUser().getId() (getUserId() 편의 메서드 없음)
+            // F11에서 CustomOAuth2User에 getUserId() 추가 후 사용
+            return oAuth2User.getUser().getId();
         }
         return null;
     }
@@ -318,6 +324,11 @@ public class FeatureMemoryService {
 ```
 
 ### Webhook → User 매핑 로직
+
+> **현재 F10 방식과의 차이**:
+> - **F10 현재**: `ApiKeyService.resolveApiKeyByRepositoryId()` → `Repository.userId` **1:1** 조회 (단일 소유자만)
+> - **F11 목표**: `UserRepositoryService.findUserIdsByRepositoryId()` → `user_repositories` **N:N** 조회 (다중 사용자)
+> - **전환 방법**: `user_repositories` 테이블 생성 후, Webhook 경로에서 `resolveApiKeyByRepositoryId()` 대신 `user_repositories` 기반 다중 사용자 루프로 교체
 
 `WebhookController` 수정:
 
@@ -385,7 +396,7 @@ public class UserRepositoryService {
 | 상황 | 처리 방식 |
 |------|----------|
 | `user_repositories`에 매핑 없는 Repository | Webhook 무시 + `WARN` 로그, 정상 응답 (200 OK) |
-| `user_id IS NULL` (마이그레이션 전 레거시 데이터) | 전역 접근 허용 (과도기), 마이그레이션 후 점진적 제거 |
+| `user_id IS NULL` (마이그레이션 전 레거시 데이터) | F10에서 첫 가입 시 자동 마이그레이션 완료 전제. `WHERE user_id = ?` 엄격 격리 (OR NULL 허용 안 함) |
 | `TenantContext` 미설정 상태에서 쿼리 | `TenantContextException` 발생, 500 에러 (안전장치) |
 | 하나의 Repository에 여러 사용자 연결 | 각 사용자별로 독립적으로 리뷰 수행, 사용량도 각각 차감 |
 | ThreadLocal 메모리 누수 | `finally` 블록에서 `clear()` 강제 호출로 방지 |
@@ -429,9 +440,10 @@ public class UserRepositoryService {
 ## 의존성
 
 ### 의존 (Depends On)
-- F10 (user-auth): `users` 테이블, `CustomOAuth2User` (userId 추출)
-- Spring Security: `SecurityContext`, `Authentication`
-- 기존 Entity: `Repository`, `FeatureMemory`, `ReviewContext` (외래키 추가)
+- F10 (user-auth): `users` 테이블, `CustomOAuth2User` (단, `getUserId()` 편의 메서드 없음 → F11에서 추가 필요)
+- F10 (user-auth): 3개 Entity에 `user_id` 컬럼 이미 추가됨 + `updateUserIdWhereNull()` 마이그레이션 메서드 존재
+- F10 (user-auth): `ApiKeyService.resolveApiKeyByRepositoryId()` — `Repository.userId` 1:1 조회 (F11에서 N:N으로 전환)
+- Spring Security: `SecurityContext`, `Authentication`, `OAuth2LoginAuthenticationFilter`
 
 ### 피의존 (Depended By)
 - F12 (repository-management): Repository 소유권 검증
@@ -440,15 +452,23 @@ public class UserRepositoryService {
 
 ## 완료 조건
 
-- [ ] `user_repositories` 테이블 생성 (N:N 연결)
-- [ ] 기존 테이블에 `user_id` 컬럼 추가 (`repositories`, `feature_memory`, `review_context`)
-- [ ] 복합 인덱스 생성 (`user_id` + 기존 조건)
-- [ ] `TenantContext.java` 구현 (ThreadLocal, 예외 처리)
-- [ ] `TenantFilter.java` 구현 (SecurityContext 연동, Webhook 제외)
-- [ ] 모든 JPA Repository 쿼리에 `user_id` 조건 추가
-- [ ] `WebhookController`에 `repository_id` → `user_id` 매핑 로직 추가
-- [ ] `UserRepositoryService` 구현 (매핑 조회)
-- [ ] 기존 익명 데이터 마이그레이션 (F10 연동)
-- [ ] 단위 테스트 6개 이상 (TenantContext, TenantFilter)
-- [ ] 통합 테스트 5개 이상 (데이터 격리, Webhook 매핑)
-- [ ] `TenantContextException` 커스텀 예외 클래스 구현
+### F10에서 이미 완료 (F11 전제조건)
+- [x] 기존 테이블에 `user_id` 컬럼 추가 (`repository`, `feature_memory`, `review_context`)
+- [x] 기존 익명 데이터 마이그레이션 (`CustomOAuth2UserService.migrateAnonymousData()`)
+- [x] `updateUserIdWhereNull()` 메서드 (3개 JPA Repository 모두)
+
+### F11에서 구현
+- [x] `CustomOAuth2User`에 `getUserId()` 편의 메서드 추가
+- [x] `user_repositories` 테이블 + Entity 생성 (N:N 연결)
+- [x] 복합 인덱스 생성 (`user_id` + 기존 조건)
+- [x] `TenantContext.java` 구현 (ThreadLocal, 예외 처리)
+- [x] `TenantContextException` 커스텀 예외 클래스 구현
+- [x] `TenantFilter.java` 구현 (SecurityContext 연동, Webhook 제외)
+- [x] `SecurityConfig`에 `TenantFilter` 등록 (`OAuth2LoginAuthenticationFilter` 이후)
+- [x] 모든 JPA Repository 쿼리에 `user_id` 조건 추가 (`FeatureMemoryJpaRepository`, `ReviewContextJpaRepository`, `RepositoryJpaRepository`)
+- [x] `FeatureMemoryRepository` (서비스) 호출부에 `userId` 파라미터 전파 (`getCurrentUserIdOrThrow()` 엄격 격리)
+- [x] `ReviewContextService` 호출부에 `userId` 파라미터 전파 (`getCurrentUserIdOrThrow()` 엄격 격리)
+- [x] `UserRepositoryService` 구현 (`user_repositories` 기반 매핑 조회)
+- [x] `WebhookController` 전환: `resolveApiKeyByRepositoryId()` 1:1 → `user_repositories` N:N 다중 사용자 루프
+- [x] 단위 테스트 6개 이상 (TenantContext 8개, TenantFilter 4개, UserRepositoryService 5개 = 17개)
+- [x] 통합 테스트 5개 이상 (WebhookControllerTest 8개, WebhookControllerTenantTest 4개 = 12개)
