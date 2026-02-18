@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/base}">
+<head><title>Profile</title></head>
+<body>
+<div layout:fragment="content">
+    <h2 class="mb-4">프로필</h2>
+    <div class="row">
+        <div class="col-md-4 text-center">
+            <img th:if="${user.avatarUrl != null}" th:src="${user.avatarUrl}"
+                 class="rounded-circle mb-3" width="120" height="120" alt="avatar">
+            <i th:unless="${user.avatarUrl != null}"
+               class="bi bi-person-circle display-1 mb-3"></i>
+            <h4 th:text="${user.githubLogin}">username</h4>
+            <p class="text-muted" th:text="${user.email ?: '이메일 미설정'}">email</p>
+            <span class="badge bg-primary" th:text="${user.role}">USER</span>
+        </div>
+
+        <div class="col-md-8">
+            <div class="card mb-3">
+                <div class="card-header">계정 정보</div>
+                <div class="card-body">
+                    <table class="table table-borderless mb-0">
+                        <tr>
+                            <th style="width:30%">GitHub ID</th>
+                            <td th:text="${user.githubId}">12345</td>
+                        </tr>
+                        <tr>
+                            <th>이름</th>
+                            <td th:text="${user.name ?: '-'}">name</td>
+                        </tr>
+                        <tr>
+                            <th>가입일</th>
+                            <td th:text="${#temporals.format(user.createdAt, 'yyyy-MM-dd')}">2025-01-01</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">Anthropic API Key</div>
+                <div class="card-body">
+                    <div th:if="${apiKeyStatus.hasApiKey}">
+                        <span class="badge bg-success">설정됨</span>
+                        <code th:text="${apiKeyStatus.maskedKey}" class="ms-2">sk-ant-****</code>
+                    </div>
+                    <div th:unless="${apiKeyStatus.hasApiKey}">
+                        <span class="badge bg-warning text-dark">미설정</span>
+                        <p class="text-muted mt-2 mb-0">API Key를 설정해야 리뷰를 받을 수 있습니다.</p>
+                    </div>
+                    <a href="/settings/api-key" class="btn btn-outline-primary btn-sm mt-3">
+                        API Key 관리
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>
