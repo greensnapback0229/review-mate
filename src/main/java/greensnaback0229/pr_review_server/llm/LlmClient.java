@@ -8,6 +8,7 @@ import com.anthropic.models.messages.MessageParam;
 import com.anthropic.models.messages.Model;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import greensnaback0229.pr_review_server.llm.dto.ReviewResponse;
+import greensnaback0229.pr_review_server.llm.dto.LlmCommentResponse;
 import greensnaback0229.pr_review_server.llm.dto.MemorySuggestion;
 import greensnaback0229.pr_review_server.llm.dto.InlineComment;
 import lombok.extern.slf4j.Slf4j;
@@ -103,12 +104,33 @@ public class LlmClient {
 
             Message response = client.messages().create(params);
 
+            // 사용량 추출
+            int inputTokens = 0;
+            int outputTokens = 0;
+            try {
+                inputTokens = (int) response.usage().inputTokens();
+                outputTokens = (int) response.usage().outputTokens();
+                log.info("LLM usage: input={}, output={}", inputTokens, outputTokens);
+            } catch (Exception e) {
+                log.warn("Failed to extract usage from LLM response: {}", e.getMessage());
+            }
+
             // 응답 파싱
             String content = extractContent(response);
             log.info("LLM Response: {}", content);
 
-            // JSON 추출 및 파싱
-            return parseResponse(content);
+            // JSON 추출 및 파싱 + 사용량 포함
+            ReviewResponse reviewResponse = parseResponse(content);
+            return ReviewResponse.builder()
+                    .generalReview(reviewResponse.getGeneralReview())
+                    .inlineComments(reviewResponse.getInlineComments())
+                    .needMoreContext(reviewResponse.isNeedMoreContext())
+                    .requestedFiles(reviewResponse.getRequestedFiles())
+                    .reason(reviewResponse.getReason())
+                    .memorySuggestion(reviewResponse.getMemorySuggestion())
+                    .inputTokens(inputTokens)
+                    .outputTokens(outputTokens)
+                    .build();
 
         } catch (Exception e) {
             log.error("LLM request failed", e);
@@ -218,14 +240,14 @@ public class LlmClient {
     }
 
     /**
-     * 코멘트 응답 생성
+     * 코멘트 응답 생성 (사용량 포함)
      *
      * @param apiKey Anthropic API 키
      * @param systemPrompt 시스템 프롬프트
      * @param userPrompt 사용자 프롬프트
-     * @return 생성된 응답 텍스트
+     * @return LlmCommentResponse (응답 텍스트 + 토큰 사용량)
      */
-    public String generateCommentResponse(String apiKey, String systemPrompt, String userPrompt) {
+    public LlmCommentResponse generateCommentResponse(String apiKey, String systemPrompt, String userPrompt) {
         if (apiKey == null || apiKey.trim().isEmpty()) {
             log.error("API 키가 제공되지 않았습니다");
             throw new IllegalArgumentException("API 키는 필수입니다");
@@ -249,7 +271,19 @@ public class LlmClient {
                     .build();
 
             Message response = client.messages().create(params);
-            return extractContent(response);
+
+            // 사용량 추출
+            int inputTokens = 0;
+            int outputTokens = 0;
+            try {
+                inputTokens = (int) response.usage().inputTokens();
+                outputTokens = (int) response.usage().outputTokens();
+            } catch (Exception e) {
+                log.warn("Failed to extract usage from comment response: {}", e.getMessage());
+            }
+
+            String content = extractContent(response);
+            return new LlmCommentResponse(content, inputTokens, outputTokens);
 
         } catch (Exception e) {
             log.error("Failed to generate comment response", e);

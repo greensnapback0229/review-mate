@@ -21,6 +21,9 @@ import greensnaback0229.pr_review_server.parser.PrParser;
 import greensnaback0229.pr_review_server.parser.dto.PrContext;
 import greensnaback0229.pr_review_server.prompt.PromptBuilder;
 import greensnaback0229.pr_review_server.comment.ReviewContextService;
+import greensnaback0229.pr_review_server.tenant.TenantContext;
+import greensnaback0229.pr_review_server.usage.UsageService;
+import greensnaback0229.pr_review_server.usage.entity.ReviewType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -40,6 +43,7 @@ public class PrReviewService {
 	private final LlmClient llmClient;
 	private final ReviewAggregator reviewAggregator;
 	private final ReviewContextService reviewContextService;
+	private final UsageService usageService;
 
 	/**
 	 * PR 리뷰 전체 프로세스 실행
@@ -174,6 +178,18 @@ public class PrReviewService {
 
 			// 7. LLM 리뷰 요청
 			ReviewResponse reviewResponse = llmClient.startReview(apiKey, systemPrompt, initialPrompt);
+
+			// 7-1. 사용량 기록
+			try {
+				Long userId = TenantContext.getCurrentUserId();
+				if (userId != null) {
+					usageService.recordUsage(userId, repositoryId, prNumber, feature,
+							reviewResponse.getInputTokens(), reviewResponse.getOutputTokens(),
+							ReviewType.PR_REVIEW);
+				}
+			} catch (Exception e) {
+				log.warn("Failed to record usage for feature {}: {}", feature, e.getMessage());
+			}
 
 			// 8. 추가 파일 요청 처리 (필요시)
 			while (reviewResponse.isNeedMoreContext()) {

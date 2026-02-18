@@ -41,4 +41,16 @@ public class ReviewResponse {
      * LLM이 리뷰를 통해 학습한 내용을 구조화하여 제안
      */
     private MemorySuggestion memorySuggestion;
+
+    /**
+     * LLM API 입력 토큰 수 (사용량 추적용)
+     */
+    @Builder.Default
+    private int inputTokens = 0;
+
+    /**
+     * LLM API 출력 토큰 수 (사용량 추적용)
+     */
+    @Builder.Default
+    private int outputTokens = 0;
 }

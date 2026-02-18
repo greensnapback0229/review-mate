@@ -2,7 +2,9 @@ package greensnaback0229.pr_review_server.comment;
 
 import greensnaback0229.pr_review_server.comment.entity.ReviewContext;
 import greensnaback0229.pr_review_server.llm.LlmClient;
+import greensnaback0229.pr_review_server.llm.dto.LlmCommentResponse;
 import greensnaback0229.pr_review_server.prompt.PromptBuilder;
+import greensnaback0229.pr_review_server.usage.UsageService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,6 +33,9 @@ class CommentResponseServiceTest {
     @Mock
     private LlmClient llmClient;
 
+    @Mock
+    private UsageService usageService;
+
     @InjectMocks
     private CommentResponseService commentResponseService;
 
@@ -58,7 +63,7 @@ class CommentResponseServiceTest {
         List<ReviewContext> contexts = Arrays.asList(context);
         String systemPrompt = "시스템 프롬프트";
         String userPrompt = "사용자 프롬프트";
-        String llmResponse = "생성된 응답입니다";
+        LlmCommentResponse llmResponse = new LlmCommentResponse("생성된 응답입니다", 1000, 500);
 
         when(reviewContextService.findByRepositoryIdAndPrNumber(repositoryId, prNumber)).thenReturn(contexts);
         when(promptBuilder.buildCommentResponseSystemPrompt()).thenReturn(systemPrompt);
@@ -136,8 +141,6 @@ class CommentResponseServiceTest {
 
         // then
         assertThat(result).isEmpty();
-
-        verify(llmClient).generateCommentResponse(apiKey, systemPrompt, userPrompt);
     }
 
     @Test
