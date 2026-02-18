@@ -98,9 +98,9 @@ GitHub PR에 대해 AI 기반 자동 코드 리뷰를 제공하는 서버를 운
 | F10 | **user-auth** | GitHub OAuth 로그인 + Spring Security + 사용자 DB | Hard | **완료** |
 | F11 | **tenant-isolation** | 기존 데이터 모델에 user_id 추가, 멀티 테넌트 격리 | Hard | **완료** |
 | F12 | **repository-management** | GitHub App 설치 콜백 → 사용자-Repo 연결, CRUD | Medium | **완료** |
-| F13 | **usage-tracking** | 사용자별 월간 리뷰 횟수 추적 (모니터링 전용) | Medium |
+| F13 | **usage-tracking** | 사용자별 월간 리뷰 횟수 추적 (모니터링 전용) | Medium | **완료** |
 | ~~F14~~ | ~~**pricing-plans**~~ | ~~Stripe 구독~~ → **제거됨** (무료 서비스 운영) | - |
-| F15 | **web-ui-auth** | Thymeleaf 로그인/회원가입/프로필 페이지 | Medium |
+| F15 | **web-ui-auth** | Thymeleaf 로그인/회원가입/프로필 페이지 | Medium | **완료** |
 | F16 | **web-ui-dashboard** | 리뷰 히스토리, 통계, Repository 목록 대시보드 | Medium |
 | F17 | **web-ui-settings** | Repository 설정, Feature Registry 편집기 | Medium |
 
@@ -269,13 +269,13 @@ F7: multi-llm-support ───────────────────�
 | user-auth | `.claude/docs/domains/saas/features/user-auth/SPEC.md` | **완료** |
 | tenant-isolation | `.claude/docs/domains/saas/features/tenant-isolation/SPEC.md` | **완료** |
 | repository-management | `.claude/docs/domains/saas/features/repository-management/SPEC.md` | **완료** |
-| usage-tracking | `.claude/docs/domains/saas/features/usage-tracking/SPEC.md` | 미구현 |
+| usage-tracking | `.claude/docs/domains/saas/features/usage-tracking/SPEC.md` | **완료** |
 
 ### web-ui 도메인 (프론트엔드)
 
 | Feature | SPEC 경로 | 상태 |
 |---------|-----------|------|
-| web-ui-auth | `.claude/docs/domains/web-ui/features/web-ui-auth/SPEC.md` | 미구현 |
+| web-ui-auth | `.claude/docs/domains/web-ui/features/web-ui-auth/SPEC.md` | **완료** |
 | web-ui-dashboard | `.claude/docs/domains/web-ui/features/web-ui-dashboard/SPEC.md` | 미구현 |
 | web-ui-settings | `.claude/docs/domains/web-ui/features/web-ui-settings/SPEC.md` | 미구현 |
 | review-dashboard | `.claude/docs/domains/web-ui/features/review-dashboard/SPEC.md` | 미구현 |
