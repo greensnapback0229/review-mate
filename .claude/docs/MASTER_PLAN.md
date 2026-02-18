@@ -82,7 +82,7 @@ GitHub PR에 대해 AI 기반 자동 코드 리뷰를 제공하는 서버를 운
 | F5 | **async-processing** | 비동기 리뷰 처리 (Webhook 즉시 응답) | Medium |
 | F6 | **review-customization** | Repository별 리뷰 설정 커스터마이징 | Medium |
 | F7 | **multi-llm-support** | 다중 LLM 지원 (GPT, Gemini 등) | Hard |
-| F8 | **review-dashboard** | 리뷰 히스토리 조회 API / 간단한 대시보드 | Hard |
+| F8 | **review-dashboard** | 리뷰 히스토리 조회 API / 간단한 대시보드 | Hard | **완료** |
 | F9 | **review-comment-reply** | 봇 리뷰 댓글에 대한 대화형 응답 | Hard |
 
 ### Phase 1.5: CI/CD 파이프라인
@@ -278,7 +278,7 @@ F7: multi-llm-support ───────────────────�
 | web-ui-auth | `.claude/docs/domains/web-ui/features/web-ui-auth/SPEC.md` | **완료** |
 | web-ui-dashboard | `.claude/docs/domains/web-ui/features/web-ui-dashboard/SPEC.md` | 미구현 |
 | web-ui-settings | `.claude/docs/domains/web-ui/features/web-ui-settings/SPEC.md` | 미구현 |
-| review-dashboard | `.claude/docs/domains/web-ui/features/review-dashboard/SPEC.md` | 미구현 |
+| review-dashboard | `.claude/docs/domains/web-ui/features/review-dashboard/SPEC.md` | **완료** |
 
 의사결정 로그: 각 Feature의 SPEC.md와 동일 경로에 `DECISION_LOG.md`로 관리
 
