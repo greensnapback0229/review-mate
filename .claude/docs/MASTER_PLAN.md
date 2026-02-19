@@ -101,7 +101,7 @@ GitHub PR에 대해 AI 기반 자동 코드 리뷰를 제공하는 서버를 운
 | F13 | **usage-tracking** | 사용자별 월간 리뷰 횟수 추적 (모니터링 전용) | Medium | **완료** |
 | ~~F14~~ | ~~**pricing-plans**~~ | ~~Stripe 구독~~ → **제거됨** (무료 서비스 운영) | - |
 | F15 | **web-ui-auth** | Thymeleaf 로그인/회원가입/프로필 페이지 | Medium | **완료** |
-| F16 | **web-ui-dashboard** | 리뷰 히스토리, 통계, Repository 목록 대시보드 | Medium |
+| F16 | **web-ui-dashboard** | 리뷰 히스토리, 통계, Repository 목록 대시보드 | Medium | **완료** |
 | F17 | **web-ui-settings** | Repository 설정, Feature Registry 편집기 | Medium |
 
 ---

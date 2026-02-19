@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/base}">
+<head><title>저장소 상세</title></head>
+<body>
+<div layout:fragment="content">
+
+    <!-- 헤더 -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1">
+                    <li class="breadcrumb-item"><a href="/dashboard">대시보드</a></li>
+                    <li class="breadcrumb-item active" th:text="${repository.repoFullName}">owner/repo</li>
+                </ol>
+            </nav>
+            <h2 class="mb-0">
+                <i class="bi bi-github me-2"></i>
+                <span th:text="${repository.repoFullName}">owner/repo</span>
+            </h2>
+        </div>
+    </div>
+
+    <!-- 통계 카드 -->
+    <div class="row g-3 mb-4">
+        <div class="col-sm-6 col-lg-3">
+            <div class="card border-0 bg-primary text-white">
+                <div class="card-body">
+                    <div class="small text-white-50">전체 리뷰</div>
+                    <div class="fs-2 fw-bold" th:text="${stats.totalReviews}">0</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="card border-0 bg-success text-white">
+                <div class="card-body">
+                    <div class="small text-white-50">완료</div>
+                    <div class="fs-2 fw-bold" th:text="${stats.completedReviews}">0</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="card border-0 bg-danger text-white">
+                <div class="card-body">
+                    <div class="small text-white-50">실패</div>
+                    <div class="fs-2 fw-bold" th:text="${stats.failedReviews}">0</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="card border-0 bg-info text-white">
+                <div class="card-body">
+                    <div class="small text-white-50">평균 인라인 댓글</div>
+                    <div class="fs-2 fw-bold"
+                         th:text="${#numbers.formatDecimal(stats.averageInlineComments, 1, 1)}">0.0</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+
+        <!-- 기능별 리뷰 분포 -->
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-header"><i class="bi bi-pie-chart me-1"></i> 기능별 리뷰 분포</div>
+                <div class="card-body p-0">
+                    <div th:if="${stats.reviewsByFeature == null or stats.reviewsByFeature.empty}"
+                         class="text-center text-muted py-4">
+                        <p class="mb-0">데이터 없음</p>
+                    </div>
+                    <ul th:unless="${stats.reviewsByFeature == null or stats.reviewsByFeature.empty}"
+                        class="list-group list-group-flush">
+                        <li th:each="entry : ${stats.reviewsByFeature}"
+                            class="list-group-item d-flex justify-content-between align-items-center">
+                            <span class="badge bg-secondary me-2" th:text="${entry.key}">FEATURE</span>
+                            <span class="fw-bold" th:text="${entry.value}">0</span>
+                        </li>
+                    </ul>
+                </div>
+                <div class="card-footer text-muted small">
+                    <span>최근 7일: <strong th:text="${stats.last7DaysReviews}">0</strong>건</span>
+                    <span class="ms-3">최근 30일: <strong th:text="${stats.last30DaysReviews}">0</strong>건</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 리뷰 이력 테이블 -->
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-list-ul me-1"></i> 리뷰 이력</span>
+                    <span class="text-muted small">총 <span th:text="${reviews.totalElements}">0</span>건</span>
+                </div>
+                <div class="card-body p-0">
+                    <div th:if="${reviews.empty}" class="text-center text-muted py-5">
+                        <i class="bi bi-journal-x fs-1 d-block mb-2"></i>
+                        <p class="mb-0">아직 리뷰 기록이 없습니다.</p>
+                    </div>
+                    <div th:unless="${reviews.empty}" class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>PR</th>
+                                    <th>기능</th>
+                                    <th>인라인 댓글</th>
+                                    <th>상태</th>
+                                    <th>일시</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr th:each="review : ${reviews.content}">
+                                    <td>
+                                        <span class="badge bg-secondary me-1">#<span th:text="${review.prNumber}">1</span></span>
+                                        <span class="small" th:text="${#strings.abbreviate(review.prTitle, 35)}">title</span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-light text-dark border" th:text="${review.featureName}">FEATURE</span>
+                                    </td>
+                                    <td class="text-center">
+                                        <span th:text="${review.inlineCommentCount}">0</span>
+                                    </td>
+                                    <td>
+                                        <span th:if="${review.status == 'COMPLETED'}" class="badge bg-success">완료</span>
+                                        <span th:unless="${review.status == 'COMPLETED'}" class="badge bg-danger">실패</span>
+                                    </td>
+                                    <td class="small text-muted"
+                                        th:text="${#temporals.format(review.createdAt, 'yyyy-MM-dd HH:mm')}">2026-01-01</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 페이지네이션 -->
+                <div th:if="${reviews.totalPages > 1}" class="card-footer">
+                    <nav>
+                        <ul class="pagination pagination-sm mb-0 justify-content-center">
+                            <li class="page-item" th:classappend="${reviews.first} ? 'disabled'">
+                                <a class="page-link"
+                                   th:href="@{/repositories/{id}(id=${repository.repositoryId}, page=${reviews.number - 1})}">
+                                    &laquo;
+                                </a>
+                            </li>
+                            <li th:each="i : ${#numbers.sequence(0, reviews.totalPages - 1)}"
+                                class="page-item" th:classappend="${i == reviews.number} ? 'active'">
+                                <a class="page-link"
+                                   th:href="@{/repositories/{id}(id=${repository.repositoryId}, page=${i})}"
+                                   th:text="${i + 1}">1</a>
+                            </li>
+                            <li class="page-item" th:classappend="${reviews.last} ? 'disabled'">
+                                <a class="page-link"
+                                   th:href="@{/repositories/{id}(id=${repository.repositoryId}, page=${reviews.number + 1})}">
+                                    &raquo;
+                                </a>
+                            </li>
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+</body>
+</html>

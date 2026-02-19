@@ -34,7 +34,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/webhook/**").permitAll()
                 .requestMatchers("/login", "/oauth2/**", "/error").permitAll()
-                .requestMatchers("/api/**", "/dashboard/**", "/dashboard", "/profile", "/settings/**").authenticated()
+                .requestMatchers("/api/**", "/dashboard/**", "/dashboard", "/profile", "/settings/**", "/repositories/**").authenticated()
                 .anyRequest().permitAll()
             )
 

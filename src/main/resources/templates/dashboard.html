@@ -5,24 +5,156 @@
 <head><title>Dashboard</title></head>
 <body>
 <div layout:fragment="content">
-    <h2 class="mb-4">Dashboard</h2>
-    <div class="card">
-        <div class="card-body">
-            <h5 class="card-title">
-                환영합니다, <span th:text="${user.githubLogin}">user</span>님!
-            </h5>
-            <p class="card-text text-muted">
-                AI 기반 코드 리뷰 서비스입니다. GitHub App을 설치하고 Repository를 연결하면 PR 리뷰를 자동으로 받을 수 있습니다.
-            </p>
-            <div class="d-flex gap-2">
-                <a href="/settings/api-key" class="btn btn-primary">
-                    <i class="bi bi-key"></i> API Key 설정
-                </a>
-                <a href="/profile" class="btn btn-outline-secondary">
-                    <i class="bi bi-person"></i> 프로필
-                </a>
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="mb-0">대시보드</h2>
+        <span class="text-muted">안녕하세요, <strong th:text="${user.githubLogin}">user</strong>님!</span>
+    </div>
+
+    <!-- 이번 달 통계 카드 -->
+    <div class="row g-3 mb-4">
+        <div class="col-sm-6 col-lg-3">
+            <div class="card border-0 bg-primary text-white h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="small text-white-50">연결된 저장소</div>
+                            <div class="fs-2 fw-bold" th:text="${repositories.size()}">0</div>
+                        </div>
+                        <i class="bi bi-folder2-open fs-1 opacity-50"></i>
+                    </div>
+                </div>
             </div>
         </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="card border-0 bg-success text-white h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="small text-white-50">이번 달 리뷰</div>
+                            <div class="fs-2 fw-bold" th:text="${usage?.reviewCount ?: 0}">0</div>
+                        </div>
+                        <i class="bi bi-check2-circle fs-1 opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="card border-0 bg-info text-white h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="small text-white-50">총 토큰 사용</div>
+                            <div class="fs-2 fw-bold"
+                                 th:text="${usage != null ? #numbers.formatDecimal((usage.totalInputTokens + usage.totalOutputTokens) / 1000.0, 1, 1) + 'K' : '0'}">0</div>
+                        </div>
+                        <i class="bi bi-lightning-charge fs-1 opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="card border-0 bg-warning text-dark h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="small text-dark opacity-75">추정 비용 (이번 달)</div>
+                            <div class="fs-2 fw-bold"
+                                 th:text="${usage?.estimatedCost != null ? '$' + #numbers.formatDecimal(usage.estimatedCost, 1, 4) : '$0'}">$0</div>
+                        </div>
+                        <i class="bi bi-currency-dollar fs-1 opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+
+        <!-- 연결된 저장소 목록 -->
+        <div class="col-lg-5">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-folder me-1"></i> 연결된 저장소</span>
+                    <a href="https://github.com/apps" target="_blank" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-plus-lg"></i> 추가
+                    </a>
+                </div>
+                <div class="card-body p-0">
+                    <div th:if="${repositories.empty}" class="text-center text-muted py-5">
+                        <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                        <p class="mb-2">연결된 저장소가 없습니다.</p>
+                        <small>GitHub App을 설치하여 저장소를 연결하세요.</small>
+                    </div>
+                    <ul th:unless="${repositories.empty}" class="list-group list-group-flush">
+                        <li th:each="repo : ${repositories}"
+                            class="list-group-item list-group-item-action">
+                            <a th:href="@{/repositories/{id}(id=${repo.repositoryId})}"
+                               class="text-decoration-none text-dark d-flex justify-content-between align-items-center">
+                                <span>
+                                    <i class="bi bi-github me-2 text-muted"></i>
+                                    <span th:text="${repo.repoFullName}">owner/repo</span>
+                                </span>
+                                <i class="bi bi-chevron-right text-muted small"></i>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+                <div class="card-footer d-flex gap-2">
+                    <a href="/settings/api-key" class="btn btn-sm btn-outline-secondary">
+                        <i class="bi bi-key"></i> API Key 설정
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- 최근 리뷰 이력 -->
+        <div class="col-lg-7">
+            <div class="card h-100">
+                <div class="card-header">
+                    <i class="bi bi-clock-history me-1"></i> 최근 리뷰
+                </div>
+                <div class="card-body p-0">
+                    <div th:if="${recentReviews.empty}" class="text-center text-muted py-5">
+                        <i class="bi bi-journal-x fs-1 d-block mb-2"></i>
+                        <p class="mb-0">아직 리뷰 기록이 없습니다.</p>
+                    </div>
+                    <div th:unless="${recentReviews.empty}" class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>PR</th>
+                                    <th>기능</th>
+                                    <th>상태</th>
+                                    <th>일시</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr th:each="review : ${recentReviews}">
+                                    <td>
+                                        <a th:href="@{/repositories/{repoId}/pr/{prNumber}(repoId=${review.repositoryId}, prNumber=${review.prNumber})}"
+                                           class="text-decoration-none">
+                                            <span class="badge bg-secondary me-1">#<span th:text="${review.prNumber}">1</span></span>
+                                            <span class="small" th:text="${#strings.abbreviate(review.prTitle, 30)}">title</span>
+                                        </a>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-light text-dark border" th:text="${review.featureName}">FEATURE</span>
+                                    </td>
+                                    <td>
+                                        <span th:if="${review.status == 'COMPLETED'}" class="badge bg-success">완료</span>
+                                        <span th:unless="${review.status == 'COMPLETED'}" class="badge bg-danger">실패</span>
+                                    </td>
+                                    <td class="small text-muted"
+                                        th:text="${#temporals.format(review.createdAt, 'MM-dd HH:mm')}">00-00</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </div>
 </div>
 </body>
