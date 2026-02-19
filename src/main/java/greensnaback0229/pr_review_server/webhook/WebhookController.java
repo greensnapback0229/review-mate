@@ -1,5 +1,6 @@
 package greensnaback0229.pr_review_server.webhook;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import greensnaback0229.pr_review_server.aggregator.dto.AggregatedReview;
 import greensnaback0229.pr_review_server.auth.ApiKeyService;
 import greensnaback0229.pr_review_server.comment.CommentResponseService;
@@ -41,6 +42,7 @@ public class WebhookController {
     private final ApiKeyService apiKeyService;
     private final UserRepositoryService userRepositoryService;
     private final InstallationHandler installationHandler;
+    private final ObjectMapper objectMapper;
 
     /**
      * 처리된 webhook delivery ID를 추적하는 Set (중복 이벤트 방지)
@@ -55,7 +57,7 @@ public class WebhookController {
     public ResponseEntity<String> handleWebhookEvent(
             @RequestHeader(value = "X-GitHub-Delivery", required = false) String deliveryId,
             @RequestHeader(value = "X-GitHub-Event", required = false) String eventType,
-            @RequestBody WebhookPayload payload) {
+            @RequestBody String rawBody) {
 
         // 중복 이벤트 체크
         if (deliveryId != null && !processedDeliveryIds.add(deliveryId)) {
@@ -63,16 +65,38 @@ public class WebhookController {
             return ResponseEntity.ok("Duplicate delivery ignored");
         }
 
-        log.info("Received webhook: event={}, action={}, deliveryId={}", eventType, payload.getAction(), deliveryId);
+        log.info("Received webhook: event={}, deliveryId={}", eventType, deliveryId);
 
-        // 이벤트 유형별 라우팅
-        if ("pull_request".equals(eventType)) {
-            return handlePullRequestEvent(payload);
-        } else if ("pull_request_review_comment".equals(eventType)) {
-            return handleReviewCommentEvent(payload);
-        } else {
-            log.info("Ignoring event type: {}", eventType);
-            return ResponseEntity.ok("Ignored event: " + eventType);
+        try {
+            // installation 이벤트는 InstallationWebhookPayload로 파싱
+            if ("installation".equals(eventType) || "installation_repositories".equals(eventType)) {
+                InstallationWebhookPayload payload = objectMapper.readValue(rawBody, InstallationWebhookPayload.class);
+                log.info("Processing installation event: action={}", payload.getAction());
+                if ("installation".equals(eventType)) {
+                    if ("created".equals(payload.getAction())) installationHandler.handleCreated(payload);
+                    else if ("deleted".equals(payload.getAction())) installationHandler.handleDeleted(payload);
+                } else {
+                    if ("added".equals(payload.getAction())) installationHandler.handleRepositoriesAdded(payload);
+                    else if ("removed".equals(payload.getAction())) installationHandler.handleRepositoriesRemoved(payload);
+                }
+                return ResponseEntity.ok("Installation event processed");
+            }
+
+            // PR / comment 이벤트는 WebhookPayload로 파싱
+            WebhookPayload payload = objectMapper.readValue(rawBody, WebhookPayload.class);
+            log.info("Received webhook: action={}", payload.getAction());
+
+            if ("pull_request".equals(eventType)) {
+                return handlePullRequestEvent(payload);
+            } else if ("pull_request_review_comment".equals(eventType)) {
+                return handleReviewCommentEvent(payload);
+            } else {
+                log.info("Ignoring event type: {}", eventType);
+                return ResponseEntity.ok("Ignored event: " + eventType);
+            }
+        } catch (Exception e) {
+            log.error("Failed to parse webhook payload: {}", e.getMessage(), e);
+            return ResponseEntity.ok("Failed to parse payload");
         }
     }
 
