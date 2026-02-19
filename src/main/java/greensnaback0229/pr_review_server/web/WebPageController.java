@@ -4,14 +4,18 @@ import greensnaback0229.pr_review_server.auth.ApiKeyService;
 import greensnaback0229.pr_review_server.auth.CustomOAuth2User;
 import greensnaback0229.pr_review_server.auth.dto.ApiKeyStatusResponse;
 import greensnaback0229.pr_review_server.auth.entity.User;
+import greensnaback0229.pr_review_server.feature.FeatureRegistryLoader;
+import greensnaback0229.pr_review_server.feature.dto.FeatureDefinition;
 import greensnaback0229.pr_review_server.review.ReviewHistoryService;
 import greensnaback0229.pr_review_server.review.dto.RepositoryStatsResponse;
 import greensnaback0229.pr_review_server.review.dto.ReviewSummaryDto;
 import greensnaback0229.pr_review_server.tenant.UserRepositoryService;
 import greensnaback0229.pr_review_server.tenant.entity.UserRepository;
+import greensnaback0229.pr_review_server.tenant.repository.UserRepositoryJpaRepository;
 import greensnaback0229.pr_review_server.usage.UsageService;
 import greensnaback0229.pr_review_server.usage.dto.UsageSummary;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -24,8 +28,11 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
+@Slf4j
 @Controller
 @RequiredArgsConstructor
 public class WebPageController {
@@ -34,6 +41,8 @@ public class WebPageController {
     private final ReviewHistoryService reviewHistoryService;
     private final UsageService usageService;
     private final UserRepositoryService userRepositoryService;
+    private final UserRepositoryJpaRepository userRepositoryJpaRepository;
+    private final FeatureRegistryLoader featureRegistryLoader;
 
     @GetMapping("/")
     public String index(@AuthenticationPrincipal CustomOAuth2User principal) {
@@ -92,6 +101,50 @@ public class WebPageController {
         model.addAttribute("reviews", reviews);
         model.addAttribute("stats", stats);
         return "repositories/detail";
+    }
+
+    @GetMapping("/settings/repositories/{repositoryId}")
+    public String repositorySettings(
+            @AuthenticationPrincipal CustomOAuth2User principal,
+            @PathVariable Long repositoryId,
+            Model model) {
+
+        Long userId = principal.getUser().getId();
+
+        UserRepository repository = userRepositoryJpaRepository
+                .findByUserIdAndRepositoryId(userId, repositoryId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+
+        model.addAttribute("repository", repository);
+        return "settings/repositories/detail";
+    }
+
+    @GetMapping("/settings/repositories/{repositoryId}/features")
+    public String repositoryFeatures(
+            @AuthenticationPrincipal CustomOAuth2User principal,
+            @PathVariable Long repositoryId,
+            Model model) {
+
+        Long userId = principal.getUser().getId();
+
+        UserRepository repository = userRepositoryJpaRepository
+                .findByUserIdAndRepositoryId(userId, repositoryId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+
+        Map<String, FeatureDefinition> features = Collections.emptyMap();
+        String loadError = null;
+
+        try {
+            features = featureRegistryLoader.loadFromRepository(repository.getRepoFullName(), null);
+        } catch (Exception e) {
+            log.warn("Feature registry not found for {}: {}", repository.getRepoFullName(), e.getMessage());
+            loadError = ".github/pr-review/feature-registry.yml 파일을 찾을 수 없습니다.";
+        }
+
+        model.addAttribute("repository", repository);
+        model.addAttribute("features", features);
+        model.addAttribute("loadError", loadError);
+        return "settings/repositories/features";
     }
 
     @GetMapping("/profile")

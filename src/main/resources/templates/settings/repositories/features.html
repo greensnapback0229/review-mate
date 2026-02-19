@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/base}">
+<head><title>Feature Registry</title></head>
+<body>
+<div layout:fragment="content">
+
+    <!-- 브레드크럼 -->
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/dashboard">대시보드</a></li>
+            <li class="breadcrumb-item">
+                <a th:href="@{/settings/repositories/{id}(id=${repository.repositoryId})}"
+                   th:text="${repository.repoFullName}">owner/repo</a>
+            </li>
+            <li class="breadcrumb-item active">Feature Registry</li>
+        </ol>
+    </nav>
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="mb-0">
+            <i class="bi bi-diagram-3 me-2"></i>Feature Registry
+        </h2>
+        <a th:href="'https://github.com/' + ${repository.repoFullName} + '/edit/main/.github/pr-review/feature-registry.yml'"
+           target="_blank" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-pencil-square me-1"></i> GitHub에서 편집
+        </a>
+    </div>
+
+    <p class="text-muted mb-4">
+        <code th:text="${repository.repoFullName}">owner/repo</code>의
+        <code>.github/pr-review/feature-registry.yml</code>에 정의된 Feature 목록입니다.
+    </p>
+
+    <!-- 로드 실패 -->
+    <div th:if="${loadError != null}" class="alert alert-warning d-flex align-items-center" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+        <div>
+            <span th:text="${loadError}">에러 메시지</span>
+            <div class="mt-2">
+                <a th:href="'https://github.com/' + ${repository.repoFullName} + '/new/main/.github/pr-review'"
+                   target="_blank" class="btn btn-sm btn-warning">
+                    <i class="bi bi-plus-lg me-1"></i> feature-registry.yml 생성하기
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Feature 목록 -->
+    <div th:if="${loadError == null}">
+        <div th:if="${features.empty}" class="text-center text-muted py-5">
+            <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+            <p class="mb-0">정의된 Feature가 없습니다.</p>
+        </div>
+
+        <div th:unless="${features.empty}" class="row g-3">
+            <div th:each="entry : ${features}" class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span class="fw-bold">
+                            <i class="bi bi-tag me-1 text-primary"></i>
+                            <span th:text="${entry.key}">FEATURE</span>
+                        </span>
+                    </div>
+                    <div class="card-body">
+
+                        <!-- 설명 -->
+                        <p th:if="${entry.value.description != null}"
+                           class="text-muted small mb-3"
+                           th:text="${entry.value.description}">설명</p>
+
+                        <!-- 경로 패턴 -->
+                        <div th:if="${entry.value.paths != null and !entry.value.paths.empty}" class="mb-3">
+                            <div class="small fw-semibold text-muted mb-1">
+                                <i class="bi bi-folder2 me-1"></i>경로 패턴
+                            </div>
+                            <div th:each="path : ${entry.value.paths}">
+                                <code class="small" th:text="${path}">path</code>
+                            </div>
+                        </div>
+
+                        <!-- 핵심 파일 -->
+                        <div th:if="${entry.value.coreFiles != null and !entry.value.coreFiles.empty}">
+                            <div class="small fw-semibold text-muted mb-1">
+                                <i class="bi bi-file-earmark-code me-1"></i>핵심 파일
+                            </div>
+                            <div th:each="file : ${entry.value.coreFiles}">
+                                <code class="small text-success" th:text="${file}">file</code>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Feature 수 -->
+        <div th:unless="${features.empty}" class="text-muted small mt-3">
+            총 <strong th:text="${features.size()}">0</strong>개의 Feature가 정의되어 있습니다.
+        </div>
+    </div>
+
+    <!-- 도움말 -->
+    <div class="card mt-4 bg-light border-0">
+        <div class="card-body">
+            <h6 class="card-title"><i class="bi bi-info-circle me-1"></i> feature-registry.yml 구조</h6>
+            <pre class="mb-0 small"><code>features:
+  AUTH:
+    description: 인증/인가 관련 기능
+    paths:
+      - "src/main/java/**/auth/**"
+    coreFiles:
+      - "src/main/java/com/example/auth/AuthService.java"</code></pre>
+        </div>
+    </div>
+
+</div>
+</body>
+</html>

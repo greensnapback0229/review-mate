@@ -5,6 +5,7 @@ import greensnaback0229.pr_review_server.tenant.repository.UserRepositoryJpaRepo
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -41,5 +42,18 @@ public class UserRepositoryService {
      */
     public boolean existsMapping(Long userId, Long repositoryId) {
         return userRepositoryJpaRepository.existsByUserIdAndRepositoryId(userId, repositoryId);
+    }
+
+    /**
+     * Repository 활성/비활성 토글
+     * @return 변경 후 isActive 값
+     */
+    @Transactional
+    public boolean toggleActive(Long userId, Long repositoryId, boolean active) {
+        UserRepository userRepo = userRepositoryJpaRepository
+                .findByUserIdAndRepositoryId(userId, repositoryId)
+                .orElseThrow(() -> new IllegalArgumentException("Repository not found: " + repositoryId));
+        userRepositoryJpaRepository.updateIsActiveByIdAndUserId(userRepo.getId(), userId, active);
+        return active;
     }
 }

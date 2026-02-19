@@ -4,11 +4,14 @@ import greensnaback0229.pr_review_server.auth.ApiKeyService;
 import greensnaback0229.pr_review_server.auth.CustomOAuth2User;
 import greensnaback0229.pr_review_server.auth.dto.ApiKeyStatusResponse;
 import greensnaback0229.pr_review_server.auth.entity.User;
+import greensnaback0229.pr_review_server.feature.FeatureRegistryLoader;
+import greensnaback0229.pr_review_server.feature.dto.FeatureDefinition;
 import greensnaback0229.pr_review_server.review.ReviewHistoryService;
 import greensnaback0229.pr_review_server.review.dto.RepositoryStatsResponse;
 import greensnaback0229.pr_review_server.review.dto.ReviewSummaryDto;
 import greensnaback0229.pr_review_server.tenant.UserRepositoryService;
 import greensnaback0229.pr_review_server.tenant.entity.UserRepository;
+import greensnaback0229.pr_review_server.tenant.repository.UserRepositoryJpaRepository;
 import greensnaback0229.pr_review_server.usage.UsageService;
 import greensnaback0229.pr_review_server.usage.dto.UsageSummary;
 import org.junit.jupiter.api.DisplayName;
@@ -28,6 +31,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.when;
@@ -43,65 +47,43 @@ class WebPageControllerTest {
     @Autowired
     private MockMvc mockMvc;
 
-    @MockBean
-    private ApiKeyService apiKeyService;
-
-    @MockBean
-    private ReviewHistoryService reviewHistoryService;
-
-    @MockBean
-    private UsageService usageService;
-
-    @MockBean
-    private UserRepositoryService userRepositoryService;
+    @MockBean private ApiKeyService apiKeyService;
+    @MockBean private ReviewHistoryService reviewHistoryService;
+    @MockBean private UsageService usageService;
+    @MockBean private UserRepositoryService userRepositoryService;
+    @MockBean private UserRepositoryJpaRepository userRepositoryJpaRepository;
+    @MockBean private FeatureRegistryLoader featureRegistryLoader;
 
     private User createTestUser() {
         return User.builder()
-                .id(1L)
-                .githubId(12345L)
-                .githubLogin("testuser")
-                .name("Test User")
-                .email("test@example.com")
+                .id(1L).githubId(12345L).githubLogin("testuser")
+                .name("Test User").email("test@example.com")
                 .avatarUrl("https://avatars.githubusercontent.com/u/12345")
-                .githubToken("encrypted-token")
-                .role("USER")
-                .build();
+                .githubToken("encrypted-token").role("USER").build();
     }
 
     private SecurityMockMvcRequestPostProcessors.OAuth2LoginRequestPostProcessor mockOAuth2User() {
         User user = createTestUser();
-        CustomOAuth2User customUser = new CustomOAuth2User(user, Map.of(
-                "id", 12345,
-                "login", "testuser"
-        ));
-        return oauth2Login().oauth2User(customUser);
+        return oauth2Login().oauth2User(new CustomOAuth2User(user, Map.of("id", 12345, "login", "testuser")));
     }
 
     private UserRepository createTestUserRepository(Long repoId, String fullName) {
         return UserRepository.builder()
-                .id(1L)
-                .userId(1L)
-                .repositoryId(repoId)
-                .repoFullName(fullName)
-                .installationId(999L)
-                .isActive(true)
-                .build();
+                .id(1L).userId(1L).repositoryId(repoId)
+                .repoFullName(fullName).installationId(999L).isActive(true).build();
     }
 
     @Nested
     @DisplayName("GET / (루트)")
     class RootPage {
-
-        @Test
-        @DisplayName("인증된 사용자 → /dashboard redirect")
+        @Test @DisplayName("인증된 사용자 → /dashboard redirect")
         void 인증된사용자_대시보드리다이렉트() throws Exception {
             mockMvc.perform(get("/").with(mockOAuth2User()))
                     .andExpect(status().is3xxRedirection())
                     .andExpect(redirectedUrl("/dashboard"));
         }
 
-        @Test
-        @DisplayName("미인증 사용자 → /login redirect")
+        @Test @DisplayName("미인증 사용자 → /login redirect")
         void 미인증사용자_로그인리다이렉트() throws Exception {
             mockMvc.perform(get("/"))
                     .andExpect(status().is3xxRedirection())
@@ -112,9 +94,7 @@ class WebPageControllerTest {
     @Nested
     @DisplayName("GET /login")
     class LoginPage {
-
-        @Test
-        @DisplayName("로그인 페이지 정상 반환")
+        @Test @DisplayName("로그인 페이지 정상 반환")
         void 로그인페이지_정상반환() throws Exception {
             mockMvc.perform(get("/login"))
                     .andExpect(status().isOk())
@@ -125,24 +105,18 @@ class WebPageControllerTest {
     @Nested
     @DisplayName("GET /dashboard")
     class DashboardPage {
-
-        @Test
-        @DisplayName("인증된 사용자 → 대시보드 정상 반환 + Model에 repositories/recentReviews/usage 포함")
+        @Test @DisplayName("인증된 사용자 → 대시보드 정상 반환 + Model에 repositories/recentReviews/usage 포함")
         void 인증된사용자_대시보드_정상반환() throws Exception {
             UserRepository repo = createTestUserRepository(100L, "testuser/my-repo");
             ReviewSummaryDto review = ReviewSummaryDto.builder()
-                    .reviewId(1L).repositoryId(100L).prNumber(1)
-                    .prTitle("feat: test").featureName("AUTH")
-                    .status("COMPLETED").createdAt(LocalDateTime.now())
-                    .build();
+                    .reviewId(1L).repositoryId(100L).prNumber(1).prTitle("feat: test")
+                    .featureName("AUTH").status("COMPLETED").createdAt(LocalDateTime.now()).build();
             UsageSummary usage = UsageSummary.builder()
                     .userId(1L).currentMonth("2026-02").reviewCount(5)
                     .totalInputTokens(10000).totalOutputTokens(3000)
-                    .estimatedCost(new BigDecimal("0.075"))
-                    .build();
+                    .estimatedCost(new BigDecimal("0.075")).build();
 
-            when(userRepositoryService.findActiveRepositoriesByUserId(1L))
-                    .thenReturn(List.of(repo));
+            when(userRepositoryService.findActiveRepositoriesByUserId(1L)).thenReturn(List.of(repo));
             when(reviewHistoryService.getReviewHistory(eq(1L), any(Pageable.class)))
                     .thenReturn(new PageImpl<>(List.of(review), PageRequest.of(0, 10), 1));
             when(usageService.getCurrentMonthUsage(1L)).thenReturn(usage);
@@ -150,14 +124,10 @@ class WebPageControllerTest {
             mockMvc.perform(get("/dashboard").with(mockOAuth2User()))
                     .andExpect(status().isOk())
                     .andExpect(view().name("dashboard"))
-                    .andExpect(model().attributeExists("user"))
-                    .andExpect(model().attributeExists("repositories"))
-                    .andExpect(model().attributeExists("recentReviews"))
-                    .andExpect(model().attributeExists("usage"));
+                    .andExpect(model().attributeExists("user", "repositories", "recentReviews", "usage"));
         }
 
-        @Test
-        @DisplayName("미인증 사용자 → /login redirect")
+        @Test @DisplayName("미인증 사용자 → /login redirect")
         void 미인증사용자_로그인리다이렉트() throws Exception {
             mockMvc.perform(get("/dashboard"))
                     .andExpect(status().is3xxRedirection())
@@ -168,24 +138,17 @@ class WebPageControllerTest {
     @Nested
     @DisplayName("GET /repositories/{repositoryId}")
     class RepositoryDetailPage {
-
-        @Test
-        @DisplayName("인증된 사용자 + 본인 Repository → 상세 페이지 정상 반환")
+        @Test @DisplayName("인증된 사용자 + 본인 Repository → 상세 페이지 정상 반환")
         void 인증된사용자_레포상세_정상반환() throws Exception {
             UserRepository repo = createTestUserRepository(100L, "testuser/my-repo");
             ReviewSummaryDto review = ReviewSummaryDto.builder()
-                    .reviewId(1L).repositoryId(100L).prNumber(1)
-                    .prTitle("feat: test").featureName("AUTH")
-                    .status("COMPLETED").createdAt(LocalDateTime.now())
-                    .build();
+                    .reviewId(1L).repositoryId(100L).prNumber(1).prTitle("feat: test")
+                    .featureName("AUTH").status("COMPLETED").createdAt(LocalDateTime.now()).build();
             RepositoryStatsResponse stats = RepositoryStatsResponse.builder()
-                    .repositoryId(100L).totalReviews(10).completedReviews(8)
-                    .failedReviews(2).averageInlineComments(3.5)
-                    .reviewsByFeature(Map.of("AUTH", 5L))
-                    .build();
+                    .repositoryId(100L).totalReviews(10).completedReviews(8).failedReviews(2)
+                    .averageInlineComments(3.5).reviewsByFeature(Map.of("AUTH", 5L)).build();
 
-            when(userRepositoryService.findActiveRepositoriesByUserId(1L))
-                    .thenReturn(List.of(repo));
+            when(userRepositoryService.findActiveRepositoriesByUserId(1L)).thenReturn(List.of(repo));
             when(reviewHistoryService.getReviewsByRepository(eq(1L), eq(100L), any(Pageable.class)))
                     .thenReturn(new PageImpl<>(List.of(review), PageRequest.of(0, 20), 1));
             when(reviewHistoryService.getRepositoryStats(1L, 100L)).thenReturn(stats);
@@ -193,23 +156,17 @@ class WebPageControllerTest {
             mockMvc.perform(get("/repositories/100").with(mockOAuth2User()))
                     .andExpect(status().isOk())
                     .andExpect(view().name("repositories/detail"))
-                    .andExpect(model().attributeExists("repository"))
-                    .andExpect(model().attributeExists("reviews"))
-                    .andExpect(model().attributeExists("stats"));
+                    .andExpect(model().attributeExists("repository", "reviews", "stats"));
         }
 
-        @Test
-        @DisplayName("타인의 Repository → 404")
+        @Test @DisplayName("타인의 Repository → 404")
         void 타인의레포_404() throws Exception {
-            when(userRepositoryService.findActiveRepositoriesByUserId(1L))
-                    .thenReturn(List.of()); // 해당 user에 연결된 repo 없음
-
+            when(userRepositoryService.findActiveRepositoriesByUserId(1L)).thenReturn(List.of());
             mockMvc.perform(get("/repositories/999").with(mockOAuth2User()))
                     .andExpect(status().isNotFound());
         }
 
-        @Test
-        @DisplayName("미인증 사용자 → /login redirect")
+        @Test @DisplayName("미인증 사용자 → /login redirect")
         void 미인증사용자_로그인리다이렉트() throws Exception {
             mockMvc.perform(get("/repositories/100"))
                     .andExpect(status().is3xxRedirection())
@@ -218,27 +175,97 @@ class WebPageControllerTest {
     }
 
     @Nested
+    @DisplayName("GET /settings/repositories/{repositoryId}")
+    class RepositorySettingsPage {
+        @Test @DisplayName("인증된 사용자 + 본인 저장소 → 설정 페이지 정상 반환")
+        void 인증된사용자_저장소설정_정상반환() throws Exception {
+            UserRepository repo = createTestUserRepository(100L, "testuser/my-repo");
+            when(userRepositoryJpaRepository.findByUserIdAndRepositoryId(1L, 100L))
+                    .thenReturn(Optional.of(repo));
+
+            mockMvc.perform(get("/settings/repositories/100").with(mockOAuth2User()))
+                    .andExpect(status().isOk())
+                    .andExpect(view().name("settings/repositories/detail"))
+                    .andExpect(model().attributeExists("repository"));
+        }
+
+        @Test @DisplayName("타인의 저장소 → 404")
+        void 타인의저장소_404() throws Exception {
+            when(userRepositoryJpaRepository.findByUserIdAndRepositoryId(1L, 999L))
+                    .thenReturn(Optional.empty());
+
+            mockMvc.perform(get("/settings/repositories/999").with(mockOAuth2User()))
+                    .andExpect(status().isNotFound());
+        }
+
+        @Test @DisplayName("미인증 사용자 → /login redirect")
+        void 미인증사용자_로그인리다이렉트() throws Exception {
+            mockMvc.perform(get("/settings/repositories/100"))
+                    .andExpect(status().is3xxRedirection())
+                    .andExpect(redirectedUrlPattern("**/login"));
+        }
+    }
+
+    @Nested
+    @DisplayName("GET /settings/repositories/{repositoryId}/features")
+    class RepositoryFeaturesPage {
+        @Test @DisplayName("Feature Registry 정상 로드 → features 모델 포함")
+        void features_정상로드() throws Exception {
+            UserRepository repo = createTestUserRepository(100L, "testuser/my-repo");
+            FeatureDefinition featureDef = FeatureDefinition.builder()
+                    .name("AUTH").description("인증 기능")
+                    .paths(List.of("src/main/**/auth/**")).build();
+
+            when(userRepositoryJpaRepository.findByUserIdAndRepositoryId(1L, 100L))
+                    .thenReturn(Optional.of(repo));
+            when(featureRegistryLoader.loadFromRepository(eq("testuser/my-repo"), isNull()))
+                    .thenReturn(Map.of("AUTH", featureDef));
+
+            mockMvc.perform(get("/settings/repositories/100/features").with(mockOAuth2User()))
+                    .andExpect(status().isOk())
+                    .andExpect(view().name("settings/repositories/features"))
+                    .andExpect(model().attributeExists("repository", "features"))
+                    .andExpect(model().attribute("loadError", (Object) null));
+        }
+
+        @Test @DisplayName("Feature Registry 없음 → loadError 모델 포함")
+        void features_파일없음_loadError() throws Exception {
+            UserRepository repo = createTestUserRepository(100L, "testuser/my-repo");
+            when(userRepositoryJpaRepository.findByUserIdAndRepositoryId(1L, 100L))
+                    .thenReturn(Optional.of(repo));
+            when(featureRegistryLoader.loadFromRepository(any(), isNull()))
+                    .thenThrow(new java.io.IOException("404 Not Found"));
+
+            mockMvc.perform(get("/settings/repositories/100/features").with(mockOAuth2User()))
+                    .andExpect(status().isOk())
+                    .andExpect(view().name("settings/repositories/features"))
+                    .andExpect(model().attributeExists("loadError"));
+        }
+
+        @Test @DisplayName("미인증 사용자 → /login redirect")
+        void 미인증사용자_로그인리다이렉트() throws Exception {
+            mockMvc.perform(get("/settings/repositories/100/features"))
+                    .andExpect(status().is3xxRedirection())
+                    .andExpect(redirectedUrlPattern("**/login"));
+        }
+    }
+
+    @Nested
     @DisplayName("GET /profile")
     class ProfilePage {
-
-        @Test
-        @DisplayName("인증된 사용자 → 프로필 정상 반환 + Model에 user, apiKeyStatus 포함")
+        @Test @DisplayName("인증된 사용자 → 프로필 정상 반환")
         void 인증된사용자_프로필_정상반환() throws Exception {
             ApiKeyStatusResponse apiKeyStatus = ApiKeyStatusResponse.builder()
-                    .hasApiKey(true)
-                    .maskedKey("sk-ant-****a3f2")
-                    .build();
+                    .hasApiKey(true).maskedKey("sk-ant-****a3f2").build();
             when(apiKeyService.getApiKeyStatus(1L)).thenReturn(apiKeyStatus);
 
             mockMvc.perform(get("/profile").with(mockOAuth2User()))
                     .andExpect(status().isOk())
                     .andExpect(view().name("profile"))
-                    .andExpect(model().attributeExists("user"))
-                    .andExpect(model().attributeExists("apiKeyStatus"));
+                    .andExpect(model().attributeExists("user", "apiKeyStatus"));
         }
 
-        @Test
-        @DisplayName("미인증 사용자 → /login redirect")
+        @Test @DisplayName("미인증 사용자 → /login redirect")
         void 미인증사용자_로그인리다이렉트() throws Exception {
             mockMvc.perform(get("/profile"))
                     .andExpect(status().is3xxRedirection())
@@ -249,13 +276,10 @@ class WebPageControllerTest {
     @Nested
     @DisplayName("GET /settings/api-key")
     class ApiKeySettingsPage {
-
-        @Test
-        @DisplayName("인증된 사용자 → API Key 설정 페이지 정상 반환")
+        @Test @DisplayName("인증된 사용자 → API Key 설정 페이지 정상 반환")
         void 인증된사용자_apiKey설정_정상반환() throws Exception {
             ApiKeyStatusResponse apiKeyStatus = ApiKeyStatusResponse.builder()
-                    .hasApiKey(false)
-                    .build();
+                    .hasApiKey(false).build();
             when(apiKeyService.getApiKeyStatus(1L)).thenReturn(apiKeyStatus);
 
             mockMvc.perform(get("/settings/api-key").with(mockOAuth2User()))
@@ -264,8 +288,7 @@ class WebPageControllerTest {
                     .andExpect(model().attributeExists("apiKeyStatus"));
         }
 
-        @Test
-        @DisplayName("미인증 사용자 → /login redirect")
+        @Test @DisplayName("미인증 사용자 → /login redirect")
         void 미인증사용자_로그인리다이렉트() throws Exception {
             mockMvc.perform(get("/settings/api-key"))
                     .andExpect(status().is3xxRedirection())
