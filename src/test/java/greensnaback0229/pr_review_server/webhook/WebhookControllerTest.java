@@ -10,6 +10,7 @@ import greensnaback0229.pr_review_server.installation.InstallationHandler;
 import greensnaback0229.pr_review_server.tenant.TenantContext;
 import greensnaback0229.pr_review_server.tenant.UserRepositoryService;
 import greensnaback0229.pr_review_server.webhook.dto.WebhookPayload;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -17,10 +18,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.ResponseEntity;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
 
@@ -60,6 +61,9 @@ class WebhookControllerTest {
 
     @InjectMocks
     private WebhookController webhookController;
+
+    @Spy
+    ObjectMapper objectMapper = new ObjectMapper();
 
     @AfterEach
     void tearDown() {
@@ -120,7 +124,7 @@ class WebhookControllerTest {
         ResponseEntity<String> response = webhookController.handleWebhookEvent(
                 TEST_DELIVERY_ID,
                 "pull_request",
-                payload
+                objectMapper.writeValueAsString(payload)
         );
 
         // then
@@ -143,7 +147,7 @@ class WebhookControllerTest {
 
     @Test
     @DisplayName("handleWebhookEvent_중복delivery무시")
-    void handleWebhookEvent_중복delivery무시() {
+    void handleWebhookEvent_중복delivery무시() throws Exception {
         // given
         WebhookPayload payload = WebhookPayload.builder()
                 .action("opened")
@@ -155,14 +159,14 @@ class WebhookControllerTest {
         ResponseEntity<String> firstResponse = webhookController.handleWebhookEvent(
                 TEST_DELIVERY_ID,
                 "pull_request",
-                payload
+                objectMapper.writeValueAsString(payload)
         );
 
         // when - 동일한 deliveryId로 두 번째 호출
         ResponseEntity<String> secondResponse = webhookController.handleWebhookEvent(
                 TEST_DELIVERY_ID,
                 "pull_request",
-                payload
+                objectMapper.writeValueAsString(payload)
         );
 
         // then
@@ -172,7 +176,7 @@ class WebhookControllerTest {
 
     @Test
     @DisplayName("handleWebhookEvent_봇코멘트무시")
-    void handleWebhookEvent_봇코멘트무시() {
+    void handleWebhookEvent_봇코멘트무시() throws Exception {
         // given
         WebhookPayload payload = WebhookPayload.builder()
                 .action("created")
@@ -194,7 +198,7 @@ class WebhookControllerTest {
         ResponseEntity<String> response = webhookController.handleWebhookEvent(
                 TEST_DELIVERY_ID,
                 "pull_request_review_comment",
-                payload
+                objectMapper.writeValueAsString(payload)
         );
 
         // then
@@ -205,7 +209,7 @@ class WebhookControllerTest {
 
     @Test
     @DisplayName("handleWebhookEvent_비답글코멘트무시")
-    void handleWebhookEvent_비답글코멘트무시() {
+    void handleWebhookEvent_비답글코멘트무시() throws Exception {
         // given
         WebhookPayload payload = WebhookPayload.builder()
                 .action("created")
@@ -227,7 +231,7 @@ class WebhookControllerTest {
         ResponseEntity<String> response = webhookController.handleWebhookEvent(
                 TEST_DELIVERY_ID,
                 "pull_request_review_comment",
-                payload
+                objectMapper.writeValueAsString(payload)
         );
 
         // then
@@ -288,7 +292,7 @@ class WebhookControllerTest {
         ResponseEntity<String> response = webhookController.handleWebhookEvent(
                 TEST_DELIVERY_ID,
                 "pull_request_review_comment",
-                payload
+                objectMapper.writeValueAsString(payload)
         );
 
         // then
@@ -303,7 +307,7 @@ class WebhookControllerTest {
 
     @Test
     @DisplayName("handleWebhookEvent_답글상한도달")
-    void handleWebhookEvent_답글상한도달() throws IOException {
+    void handleWebhookEvent_답글상한도달() throws Exception {
         // given
         WebhookPayload payload = WebhookPayload.builder()
                 .action("created")
@@ -332,7 +336,7 @@ class WebhookControllerTest {
         ResponseEntity<String> response = webhookController.handleWebhookEvent(
                 TEST_DELIVERY_ID,
                 "pull_request_review_comment",
-                payload
+                objectMapper.writeValueAsString(payload)
         );
 
         // then
@@ -361,7 +365,7 @@ class WebhookControllerTest {
         ResponseEntity<String> response = webhookController.handleWebhookEvent(
                 TEST_DELIVERY_ID,
                 "pull_request",
-                payload
+                objectMapper.writeValueAsString(payload)
         );
 
         // then
@@ -405,7 +409,7 @@ class WebhookControllerTest {
         ResponseEntity<String> response = webhookController.handleWebhookEvent(
                 TEST_DELIVERY_ID,
                 "pull_request_review_comment",
-                payload
+                objectMapper.writeValueAsString(payload)
         );
 
         // then

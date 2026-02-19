@@ -9,16 +9,17 @@ import greensnaback0229.pr_review_server.installation.InstallationHandler;
 import greensnaback0229.pr_review_server.tenant.TenantContext;
 import greensnaback0229.pr_review_server.tenant.UserRepositoryService;
 import greensnaback0229.pr_review_server.webhook.dto.WebhookPayload;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.ResponseEntity;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -39,6 +40,9 @@ class WebhookControllerTenantTest {
 
     @InjectMocks
     private WebhookController webhookController;
+
+    @Spy
+    ObjectMapper objectMapper = new ObjectMapper();
 
     @AfterEach
     void tearDown() {
@@ -69,7 +73,7 @@ class WebhookControllerTenantTest {
 
     @Test
     @DisplayName("PR 이벤트 - 다중 사용자에 대해 각각 리뷰 실행")
-    void handlePrEvent_multipleUsers_reviewsForEach() throws IOException {
+    void handlePrEvent_multipleUsers_reviewsForEach() throws Exception {
         // given
         WebhookPayload payload = createPrPayload("opened", 100L, "owner/repo", 1);
 
@@ -90,7 +94,7 @@ class WebhookControllerTenantTest {
 
         // when
         ResponseEntity<String> response = webhookController.handleWebhookEvent(
-                "delivery-1", "pull_request", payload);
+                "delivery-1", "pull_request", objectMapper.writeValueAsString(payload));
 
         // then
         assertThat(response.getStatusCode().value()).isEqualTo(200);
@@ -105,7 +109,7 @@ class WebhookControllerTenantTest {
 
     @Test
     @DisplayName("PR 이벤트 - API Key 없는 사용자는 스킵")
-    void handlePrEvent_userWithoutApiKey_skipped() throws IOException {
+    void handlePrEvent_userWithoutApiKey_skipped() throws Exception {
         // given
         WebhookPayload payload = createPrPayload("opened", 100L, "owner/repo", 1);
 
@@ -126,7 +130,7 @@ class WebhookControllerTenantTest {
 
         // when
         ResponseEntity<String> response = webhookController.handleWebhookEvent(
-                "delivery-2", "pull_request", payload);
+                "delivery-2", "pull_request", objectMapper.writeValueAsString(payload));
 
         // then
         assertThat(response.getStatusCode().value()).isEqualTo(200);
@@ -141,7 +145,7 @@ class WebhookControllerTenantTest {
 
     @Test
     @DisplayName("PR 이벤트 - 연결된 사용자 없으면 리뷰 스킵")
-    void handlePrEvent_noUsers_noReview() {
+    void handlePrEvent_noUsers_noReview() throws Exception {
         // given
         WebhookPayload payload = createPrPayload("opened", 100L, "owner/repo", 1);
 
@@ -150,7 +154,7 @@ class WebhookControllerTenantTest {
 
         // when
         ResponseEntity<String> response = webhookController.handleWebhookEvent(
-                "delivery-3", "pull_request", payload);
+                "delivery-3", "pull_request", objectMapper.writeValueAsString(payload));
 
         // then
         assertThat(response.getStatusCode().value()).isEqualTo(200);
@@ -161,7 +165,7 @@ class WebhookControllerTenantTest {
 
     @Test
     @DisplayName("TenantContext가 각 사용자 루프에서 올바르게 설정되는지 검증")
-    void handlePrEvent_tenantContextSetPerUser() {
+    void handlePrEvent_tenantContextSetPerUser() throws Exception {
         // given
         WebhookPayload payload = createPrPayload("opened", 100L, "owner/repo", 1);
 
@@ -180,7 +184,7 @@ class WebhookControllerTenantTest {
                 });
 
         // when
-        webhookController.handleWebhookEvent("delivery-4", "pull_request", payload);
+        webhookController.handleWebhookEvent("delivery-4", "pull_request", objectMapper.writeValueAsString(payload));
 
         // then
         assertThat(capturedUserIds).containsExactly(1L, 2L);
