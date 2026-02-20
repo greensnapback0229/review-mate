@@ -1,0 +1,20 @@
+sequenceDiagram
+    participant GH as GitHub
+    participant Webhook as WebhookController
+    participant UserRepo as UserRepositoryService
+    participant TC as TenantContext
+    participant Svc as PrReviewService
+
+    GH->>Webhook: POST /api/webhook/github/pr (repository_id)
+    Webhook->>UserRepo: findUsersByRepositoryId(repositoryId)
+    UserRepo-->>Webhook: List<Long> userIds
+
+    loop 각 사용자별 처리
+        Webhook->>TC: setCurrentUserId(userId)
+        Webhook->>Svc: reviewPullRequest(...)
+        Note over Svc: 이후 모든 DB 접근은 user_id로 격리됨
+        Svc-->>Webhook: 리뷰 결과
+        Webhook->>TC: clear()
+    end
+
+    Webhook-->>GH: 200 OK

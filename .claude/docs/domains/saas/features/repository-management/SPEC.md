@@ -7,56 +7,12 @@ GitHub App 설치 시 사용자-Repository 연결을 자동으로 생성하고, 
 ## 시퀀스 다이어그램
 
 ### GitHub App 설치 → Repository 연결
-```mermaid
-sequenceDiagram
-    participant User as 사용자
-    participant GH as GitHub
-    participant Webhook as WebhookController
-    participant Handler as InstallationHandler
-    participant UserSvc as UserService
-    participant DB as MySQL
 
-    User->>GH: GitHub App 설치 페이지
-    GH-->>User: Repository 선택 + 설치 승인
-    GH->>Webhook: POST /api/webhook/github/installation (action: created)
-    Note over GH,Webhook: installation.account.id: 67890<br/>repositories: [{id, full_name}]
-    Webhook->>Handler: handleInstallationCreated(payload)
-    Handler->>UserSvc: findByGithubId(67890)
-    alt 사용자 존재
-        UserSvc-->>Handler: User(id=1)
-        Handler->>DB: INSERT user_repositories (user_id, repo_id, installation_id, is_active=true)
-        Handler-->>Webhook: 연결 완료
-    else 사용자 미존재
-        UserSvc-->>Handler: null
-        Handler->>DB: INSERT pending_installations (github_id, installation_id, repositories)
-        Handler-->>Webhook: pending 저장
-    end
-    Webhook-->>GH: 200 OK
-
-    User->>Webhook: GET /api/repositories (인증된 세션)
-    Webhook->>DB: SELECT user_repositories WHERE user_id = ? AND is_active = true
-    DB-->>Webhook: List<UserRepository>
-    Webhook-->>User: JSON 응답 (연결된 Repository 목록)
-```
+![GitHub App 설치 → Repository 연결](assets/install-flow.png)
 
 ### Repository 해제 흐름
-```mermaid
-sequenceDiagram
-    participant User as 사용자 (브라우저)
-    participant API as RepositoryController
-    participant TC as TenantContext
-    participant Svc as RepositoryService
-    participant DB as MySQL
 
-    User->>API: DELETE /api/repositories/{id}
-    API->>TC: getCurrentUserIdOrThrow()
-    TC-->>API: userId
-    API->>Svc: deactivateRepository(id, userId)
-    Svc->>DB: UPDATE user_repositories SET is_active=false WHERE id=? AND user_id=?
-    DB-->>Svc: 1 row updated
-    Svc-->>API: 성공
-    API-->>User: 200 OK
-```
+![Repository 해제 흐름](assets/deactivate-flow.png)
 
 ### 흐름 요약
 1. **GitHub App 설치**: `installation` Webhook → `account.id`로 사용자 조회 → `user_repositories` 생성

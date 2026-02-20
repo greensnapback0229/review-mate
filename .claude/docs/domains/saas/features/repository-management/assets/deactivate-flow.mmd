@@ -1,0 +1,15 @@
+sequenceDiagram
+    participant User as 사용자 (브라우저)
+    participant API as RepositoryController
+    participant TC as TenantContext
+    participant Svc as RepositoryService
+    participant DB as MySQL
+
+    User->>API: DELETE /api/repositories/{id}
+    API->>TC: getCurrentUserIdOrThrow()
+    TC-->>API: userId
+    API->>Svc: deactivateRepository(id, userId)
+    Svc->>DB: UPDATE user_repositories SET is_active=false WHERE id=? AND user_id=?
+    DB-->>Svc: 1 row updated
+    Svc-->>API: 성공
+    API-->>User: 200 OK

@@ -7,45 +7,12 @@
 ## 시퀀스 다이어그램
 
 ### 리뷰 시 사용량 기록
-```mermaid
-sequenceDiagram
-    participant Webhook as WebhookController
-    participant PRS as PrReviewService
-    participant LLM as LlmClient
-    participant US as UsageService
-    participant DB as MySQL
 
-    Webhook->>PRS: reviewPullRequest(...)
-    PRS->>LLM: generateReview(prompt)
-    LLM->>LLM: Claude API 호출
-    LLM-->>PRS: LlmResponse (usage: {input_tokens, output_tokens})
-    PRS->>US: recordUsage(userId, repoId, prNumber, usage, reviewType)
-    US->>US: calculateCost(inputTokens, outputTokens)
-    US->>DB: INSERT usage_log (user_id, tokens, cost, review_type)
-    DB-->>US: 성공
-    US-->>PRS: 기록 완료
-    PRS-->>Webhook: 리뷰 결과
-```
+![리뷰 시 사용량 기록](assets/usage-record-flow.png)
 
 ### 사용량 조회 흐름
-```mermaid
-sequenceDiagram
-    participant User as 사용자 (브라우저)
-    participant API as UsageController
-    participant TC as TenantContext
-    participant US as UsageService
-    participant DB as MySQL
 
-    User->>API: GET /api/usage
-    API->>TC: getCurrentUserIdOrThrow()
-    TC-->>API: userId
-    API->>US: getCurrentMonthUsage(userId)
-    US->>DB: SELECT SUM(input_tokens), SUM(output_tokens), COUNT(*) FROM usage_log<br/>WHERE user_id=? AND created_at >= ?
-    DB-->>US: 집계 결과
-    US->>US: calculateTotalCost()
-    US-->>API: UsageSummary (reviewCount, tokens, cost)
-    API-->>User: JSON 응답
-```
+![사용량 조회 흐름](assets/usage-query-flow.png)
 
 ### 흐름 요약
 1. **리뷰 수행**: LlmClient에서 Claude API 응답의 `usage` 필드 추출 → UsageService 호출

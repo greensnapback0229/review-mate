@@ -7,37 +7,8 @@ GitHub OAuth 2.0을 통한 사용자 인증/인가 시스템 구축. Spring Secu
 ## 시퀀스 다이어그램
 
 ### GitHub OAuth 로그인 흐름
-```mermaid
-sequenceDiagram
-    participant User as 사용자 (브라우저)
-    participant App as Spring Boot
-    participant GH as GitHub OAuth
-    participant DB as MySQL
 
-    User->>App: GET /login
-    App-->>User: 로그인 페이지 (GitHub 로그인 버튼)
-    User->>App: GET /oauth2/authorization/github
-    App->>GH: GitHub OAuth 인증 페이지 redirect
-    GH-->>User: GitHub 로그인 + 권한 동의 화면
-    User->>GH: 로그인 승인
-    GH->>App: GET /login/oauth2/code/github?code=xxx
-    App->>GH: POST /login/oauth/access_token (code → token)
-    GH-->>App: access_token
-    App->>GH: GET /user (사용자 정보 조회)
-    GH-->>App: {login, id, email, avatar_url}
-    App->>App: CustomOAuth2UserService.loadUser()
-    App->>DB: SELECT COUNT(*) FROM users
-    alt 첫 번째 가입자 (count = 0)
-        App->>DB: INSERT INTO users (role='ADMIN', ...)
-        App->>DB: UPDATE repositories SET user_id = ? WHERE user_id IS NULL
-        App->>DB: UPDATE feature_memory SET user_id = ? WHERE user_id IS NULL
-        App->>DB: UPDATE review_context SET user_id = ? WHERE user_id IS NULL
-    else 일반 가입자
-        App->>DB: INSERT INTO users (role='USER', ...)
-    end
-    App->>App: Spring Security 세션 생성
-    App-->>User: redirect /dashboard
-```
+![GitHub OAuth 로그인 흐름](assets/oauth-flow.png)
 
 ### 흐름 요약
 1. 사용자가 `/login` 접근 → GitHub OAuth 인증 시작

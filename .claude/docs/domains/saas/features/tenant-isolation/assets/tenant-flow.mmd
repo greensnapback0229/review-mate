@@ -1,0 +1,19 @@
+sequenceDiagram
+    participant User as 사용자 (브라우저)
+    participant Filter as TenantFilter
+    participant TC as TenantContext
+    participant Svc as Service Layer
+    participant Repo as JPA Repository
+    participant DB as MySQL
+
+    User->>Filter: GET /api/repositories (인증된 세션)
+    Filter->>Filter: SecurityContext에서 userId 추출
+    Filter->>TC: setCurrentUserId(userId)
+    Filter->>Svc: 요청 전달
+    Svc->>Repo: findByRepositoryId(repoId)
+    Note over Repo: @Query에 user_id 조건 명시
+    Repo->>DB: SELECT ... WHERE repository_id = ? AND user_id = ?
+    DB-->>Repo: 결과 (해당 사용자 데이터만)
+    Repo-->>Svc: 데이터
+    Svc-->>User: 응답
+    Filter->>TC: clear() (finally 블록)

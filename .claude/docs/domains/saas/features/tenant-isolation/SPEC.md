@@ -7,51 +7,12 @@
 ## 시퀀스 다이어그램
 
 ### 멀티 테넌트 데이터 접근 흐름 (인증된 요청)
-```mermaid
-sequenceDiagram
-    participant User as 사용자 (브라우저)
-    participant Filter as TenantFilter
-    participant TC as TenantContext
-    participant Svc as Service Layer
-    participant Repo as JPA Repository
-    participant DB as MySQL
 
-    User->>Filter: GET /api/repositories (인증된 세션)
-    Filter->>Filter: SecurityContext에서 userId 추출
-    Filter->>TC: setCurrentUserId(userId)
-    Filter->>Svc: 요청 전달
-    Svc->>Repo: findByRepositoryId(repoId)
-    Note over Repo: @Query에 user_id 조건 명시
-    Repo->>DB: SELECT ... WHERE repository_id = ? AND user_id = ?
-    DB-->>Repo: 결과 (해당 사용자 데이터만)
-    Repo-->>Svc: 데이터
-    Svc-->>User: 응답
-    Filter->>TC: clear() (finally 블록)
-```
+![멀티 테넌트 데이터 접근 흐름 (인증된 요청)](assets/tenant-flow.png)
 
 ### Webhook 처리 흐름 (인증 없는 요청)
-```mermaid
-sequenceDiagram
-    participant GH as GitHub
-    participant Webhook as WebhookController
-    participant UserRepo as UserRepositoryService
-    participant TC as TenantContext
-    participant Svc as PrReviewService
 
-    GH->>Webhook: POST /api/webhook/github/pr (repository_id)
-    Webhook->>UserRepo: findUsersByRepositoryId(repositoryId)
-    UserRepo-->>Webhook: List<Long> userIds
-
-    loop 각 사용자별 처리
-        Webhook->>TC: setCurrentUserId(userId)
-        Webhook->>Svc: reviewPullRequest(...)
-        Note over Svc: 이후 모든 DB 접근은 user_id로 격리됨
-        Svc-->>Webhook: 리뷰 결과
-        Webhook->>TC: clear()
-    end
-
-    Webhook-->>GH: 200 OK
-```
+![Webhook 처리 흐름 (인증 없는 요청)](assets/webhook-flow.png)
 
 ### 흐름 요약
 1. **인증된 요청**: `TenantFilter`가 세션에서 `userId` 추출 → `TenantContext` 설정
