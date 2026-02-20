@@ -7,7 +7,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "review_context", uniqueConstraints = {
-    @UniqueConstraint(name = "idx_repo_pr_feature", columnNames = {"repository_id", "pr_number", "feature_name"})
+    @UniqueConstraint(name = "idx_repo_pr_feature", columnNames = {"repository_id", "pr_number", "feature_name", "user_id"})
 }, indexes = {
     @Index(name = "idx_review_context_user_repo_pr", columnList = "user_id, repository_id, pr_number")
 })
