@@ -1,0 +1,31 @@
+sequenceDiagram
+    participant GH as GitHub
+    participant WC as WebhookController
+    participant CWH as CommentWebhookHandler
+    participant RCS as ReviewContextService
+    participant CRS as CommentResponseService
+    participant LLM as LlmClient
+    participant GRC as GitHubCommentReplyClient
+
+    GH->>WC: POST /api/webhook/github/pr
+    Note over WC: event: pull_request_review_comment<br/>action: created
+    WC->>CWH: handleReviewComment(payload)
+    CWH->>CWH: 봇 코멘트에 대한 답글인지 확인
+
+    alt 봇 답글이 아님
+        CWH-->>WC: 무시
+    else 봇 답글임
+        CWH->>RCS: getReviewContext(repoId, prNumber)
+        RCS-->>CWH: ReviewContext (파일 요약 + 코드 컨텍스트)
+        CWH->>GH: 스레드 전체 대화 내역 조회
+        GH-->>CWH: 댓글 스레드
+        CWH->>CRS: generateResponse(context, thread, newComment)
+        CRS->>LLM: review(systemPrompt, commentPrompt)
+        LLM-->>CRS: 응답 텍스트
+        CRS-->>CWH: responseText
+        CWH->>GRC: replyToThread(repoFullName, prNumber, commentId, responseText)
+        GRC->>GH: POST review comment reply
+        GH-->>GRC: 201 Created
+    end
+
+    WC-->>GH: 200 OK

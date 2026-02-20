@@ -1,0 +1,11 @@
+sequenceDiagram
+    participant PRS as PrReviewService
+    participant LLM as LlmClient
+    participant RCS as ReviewContextService
+    participant DB as MySQL
+
+    PRS->>LLM: review(systemPrompt, userPrompt)
+    LLM-->>PRS: ReviewResponse
+    PRS->>RCS: saveReviewContext(repoId, prNumber, feature, files, response)
+    RCS->>DB: INSERT review_context
+    Note over DB: 파일 요약, 코드 라인,<br/>리뷰 내용 저장
