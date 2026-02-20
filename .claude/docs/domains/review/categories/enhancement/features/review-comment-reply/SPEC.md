@@ -17,11 +17,11 @@ LLM이 해당 스레드에 대화형으로 응답하는 기능.
 
 ### 1차 리뷰 시 컨텍스트 저장
 
-![1차 리뷰 컨텍스트 저장 흐름](assets/context-save.png)
+![1차 리뷰 컨텍스트 저장 흐름](assets/context-save.svg)
 
 ### 댓글 응답 흐름
 
-![댓글 응답 흐름](assets/comment-reply-flow.png)
+![댓글 응답 흐름](assets/comment-reply-flow.svg)
 
 ## 범위 정의
 
