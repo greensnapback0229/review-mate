@@ -1,21 +1,27 @@
 package greensnaback0229.pr_review_server.webhook;
 
 import greensnaback0229.pr_review_server.aggregator.dto.AggregatedReview;
+import greensnaback0229.pr_review_server.auth.ApiKeyService;
 import greensnaback0229.pr_review_server.comment.CommentResponseService;
 import greensnaback0229.pr_review_server.comment.ReviewContextService;
 import greensnaback0229.pr_review_server.comment.entity.ReviewContext;
 import greensnaback0229.pr_review_server.github.GitHubReviewClient;
+import greensnaback0229.pr_review_server.installation.InstallationHandler;
+import greensnaback0229.pr_review_server.tenant.TenantContext;
+import greensnaback0229.pr_review_server.tenant.UserRepositoryService;
 import greensnaback0229.pr_review_server.webhook.dto.WebhookPayload;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.ResponseEntity;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
 
@@ -44,8 +50,25 @@ class WebhookControllerTest {
     @Mock
     private CommentResponseService commentResponseService;
 
+    @Mock
+    private ApiKeyService apiKeyService;
+
+    @Mock
+    private UserRepositoryService userRepositoryService;
+
+    @Mock
+    private InstallationHandler installationHandler;
+
     @InjectMocks
     private WebhookController webhookController;
+
+    @Spy
+    ObjectMapper objectMapper = new ObjectMapper();
+
+    @AfterEach
+    void tearDown() {
+        TenantContext.clear();
+    }
 
     private WebhookPayload.PullRequest testPullRequest;
     private WebhookPayload.Repository testRepository;
@@ -81,7 +104,12 @@ class WebhookControllerTest {
                 .review("Test review content")
                 .build();
 
+        when(userRepositoryService.findActiveUserIdsByRepositoryId(TEST_REPOSITORY_ID))
+                .thenReturn(List.of(1L));
+        when(apiKeyService.getDecryptedApiKey(1L))
+                .thenReturn("sk-ant-api03-test-key");
         when(prReviewService.reviewPullRequest(
+                eq("sk-ant-api03-test-key"),
                 eq(TEST_REPOSITORY_ID),
                 eq(TEST_REPO_FULL_NAME),
                 eq(TEST_PR_NUMBER),
@@ -96,27 +124,30 @@ class WebhookControllerTest {
         ResponseEntity<String> response = webhookController.handleWebhookEvent(
                 TEST_DELIVERY_ID,
                 "pull_request",
-                payload
+                objectMapper.writeValueAsString(payload)
         );
 
         // then
         assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
         assertThat(response.getBody()).contains("Review completed for PR #1");
+        verify(userRepositoryService).findActiveUserIdsByRepositoryId(TEST_REPOSITORY_ID);
+        verify(apiKeyService).getDecryptedApiKey(1L);
         verify(prReviewService).reviewPullRequest(
-                TEST_REPOSITORY_ID,
-                TEST_REPO_FULL_NAME,
-                TEST_PR_NUMBER,
-                "Test PR",
-                "Test PR body",
-                "main",
-                "feature",
-                "abc123"
+                eq("sk-ant-api03-test-key"),
+                eq(TEST_REPOSITORY_ID),
+                eq(TEST_REPO_FULL_NAME),
+                eq(TEST_PR_NUMBER),
+                eq("Test PR"),
+                eq("Test PR body"),
+                eq("main"),
+                eq("feature"),
+                eq("abc123")
         );
     }
 
     @Test
     @DisplayName("handleWebhookEvent_중복delivery무시")
-    void handleWebhookEvent_중복delivery무시() {
+    void handleWebhookEvent_중복delivery무시() throws Exception {
         // given
         WebhookPayload payload = WebhookPayload.builder()
                 .action("opened")
@@ -128,14 +159,14 @@ class WebhookControllerTest {
         ResponseEntity<String> firstResponse = webhookController.handleWebhookEvent(
                 TEST_DELIVERY_ID,
                 "pull_request",
-                payload
+                objectMapper.writeValueAsString(payload)
         );
 
         // when - 동일한 deliveryId로 두 번째 호출
         ResponseEntity<String> secondResponse = webhookController.handleWebhookEvent(
                 TEST_DELIVERY_ID,
                 "pull_request",
-                payload
+                objectMapper.writeValueAsString(payload)
         );
 
         // then
@@ -145,7 +176,7 @@ class WebhookControllerTest {
 
     @Test
     @DisplayName("handleWebhookEvent_봇코멘트무시")
-    void handleWebhookEvent_봇코멘트무시() {
+    void handleWebhookEvent_봇코멘트무시() throws Exception {
         // given
         WebhookPayload payload = WebhookPayload.builder()
                 .action("created")
@@ -167,7 +198,7 @@ class WebhookControllerTest {
         ResponseEntity<String> response = webhookController.handleWebhookEvent(
                 TEST_DELIVERY_ID,
                 "pull_request_review_comment",
-                payload
+                objectMapper.writeValueAsString(payload)
         );
 
         // then
@@ -178,7 +209,7 @@ class WebhookControllerTest {
 
     @Test
     @DisplayName("handleWebhookEvent_비답글코멘트무시")
-    void handleWebhookEvent_비답글코멘트무시() {
+    void handleWebhookEvent_비답글코멘트무시() throws Exception {
         // given
         WebhookPayload payload = WebhookPayload.builder()
                 .action("created")
@@ -200,7 +231,7 @@ class WebhookControllerTest {
         ResponseEntity<String> response = webhookController.handleWebhookEvent(
                 TEST_DELIVERY_ID,
                 "pull_request_review_comment",
-                payload
+                objectMapper.writeValueAsString(payload)
         );
 
         // then
@@ -242,11 +273,15 @@ class WebhookControllerTest {
                 .botCommentIds("[]")
                 .build();
 
+        when(userRepositoryService.findActiveUserIdsByRepositoryId(TEST_REPOSITORY_ID))
+                .thenReturn(List.of(1L));
+        when(apiKeyService.getDecryptedApiKey(1L))
+                .thenReturn("sk-ant-api03-test-key");
         when(reviewContextService.isBotComment(TEST_REPOSITORY_ID, TEST_PR_NUMBER, inReplyToId))
                 .thenReturn(true);
         when(reviewContextService.countBotReplies(TEST_REPOSITORY_ID, TEST_PR_NUMBER))
                 .thenReturn(3);
-        when(commentResponseService.generateResponse(TEST_REPOSITORY_ID, TEST_PR_NUMBER, "질문입니다"))
+        when(commentResponseService.generateResponse(eq("sk-ant-api03-test-key"), eq(TEST_REPOSITORY_ID), eq(TEST_PR_NUMBER), eq("질문입니다")))
                 .thenReturn(Optional.of("답변입니다"));
         when(gitHubReviewClient.replyToReviewComment(TEST_REPO_FULL_NAME, TEST_PR_NUMBER, commentId, "답변입니다"))
                 .thenReturn(600L);
@@ -257,20 +292,22 @@ class WebhookControllerTest {
         ResponseEntity<String> response = webhookController.handleWebhookEvent(
                 TEST_DELIVERY_ID,
                 "pull_request_review_comment",
-                payload
+                objectMapper.writeValueAsString(payload)
         );
 
         // then
         assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
-        assertThat(response.getBody()).isEqualTo("Reply posted successfully");
-        verify(commentResponseService).generateResponse(TEST_REPOSITORY_ID, TEST_PR_NUMBER, "질문입니다");
+        assertThat(response.getBody()).isEqualTo("Reply processed");
+        verify(userRepositoryService).findActiveUserIdsByRepositoryId(TEST_REPOSITORY_ID);
+        verify(apiKeyService).getDecryptedApiKey(1L);
+        verify(commentResponseService).generateResponse(eq("sk-ant-api03-test-key"), eq(TEST_REPOSITORY_ID), eq(TEST_PR_NUMBER), eq("질문입니다"));
         verify(gitHubReviewClient).replyToReviewComment(TEST_REPO_FULL_NAME, TEST_PR_NUMBER, commentId, "답변입니다");
         verify(reviewContextService).addBotCommentId(TEST_REPOSITORY_ID, TEST_PR_NUMBER, "TEST_FEATURE", 600L);
     }
 
     @Test
     @DisplayName("handleWebhookEvent_답글상한도달")
-    void handleWebhookEvent_답글상한도달() throws IOException {
+    void handleWebhookEvent_답글상한도달() throws Exception {
         // given
         WebhookPayload payload = WebhookPayload.builder()
                 .action("created")
@@ -288,6 +325,8 @@ class WebhookControllerTest {
                         .build())
                 .build();
 
+        when(userRepositoryService.findActiveUserIdsByRepositoryId(TEST_REPOSITORY_ID))
+                .thenReturn(List.of(1L));
         when(reviewContextService.isBotComment(TEST_REPOSITORY_ID, TEST_PR_NUMBER, 100L))
                 .thenReturn(true);
         when(reviewContextService.countBotReplies(TEST_REPOSITORY_ID, TEST_PR_NUMBER))
@@ -297,13 +336,88 @@ class WebhookControllerTest {
         ResponseEntity<String> response = webhookController.handleWebhookEvent(
                 TEST_DELIVERY_ID,
                 "pull_request_review_comment",
-                payload
+                objectMapper.writeValueAsString(payload)
         );
 
         // then
         assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
-        assertThat(response.getBody()).isEqualTo("Bot reply limit reached");
-        verify(commentResponseService, never()).generateResponse(anyLong(), anyInt(), anyString());
+        assertThat(response.getBody()).isEqualTo("Reply processed");
+        verify(commentResponseService, never()).generateResponse(any(), anyLong(), anyInt(), anyString());
+        verify(gitHubReviewClient, never()).replyToReviewComment(anyString(), anyInt(), anyLong(), anyString());
+    }
+
+    @Test
+    @DisplayName("handleWebhookEvent_PR_API키미설정_코멘트작성")
+    void handleWebhookEvent_PR_API키미설정_코멘트작성() throws Exception {
+        // given
+        WebhookPayload payload = WebhookPayload.builder()
+                .action("opened")
+                .pullRequest(testPullRequest)
+                .repository(testRepository)
+                .build();
+
+        when(userRepositoryService.findActiveUserIdsByRepositoryId(TEST_REPOSITORY_ID))
+                .thenReturn(List.of(1L));
+        when(apiKeyService.getDecryptedApiKey(1L))
+                .thenReturn(null);
+
+        // when
+        ResponseEntity<String> response = webhookController.handleWebhookEvent(
+                TEST_DELIVERY_ID,
+                "pull_request",
+                objectMapper.writeValueAsString(payload)
+        );
+
+        // then
+        assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
+        assertThat(response.getBody()).contains("Review completed for PR #1");
+        verify(userRepositoryService).findActiveUserIdsByRepositoryId(TEST_REPOSITORY_ID);
+        verify(apiKeyService).getDecryptedApiKey(1L);
+        verify(prReviewService, never()).reviewPullRequest(any(), anyLong(), anyString(), anyInt(), anyString(), anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("handleWebhookEvent_Comment_API키미설정_스킵")
+    void handleWebhookEvent_Comment_API키미설정_스킵() throws Exception {
+        // given
+        WebhookPayload payload = WebhookPayload.builder()
+                .action("created")
+                .pullRequest(testPullRequest)
+                .repository(testRepository)
+                .comment(WebhookPayload.Comment.builder()
+                        .id(500L)
+                        .body("질문입니다")
+                        .user(WebhookPayload.User.builder()
+                                .login("developer")
+                                .type("User")
+                                .build())
+                        .inReplyToId(100L)
+                        .path("src/A.java")
+                        .build())
+                .build();
+
+        when(userRepositoryService.findActiveUserIdsByRepositoryId(TEST_REPOSITORY_ID))
+                .thenReturn(List.of(1L));
+        when(reviewContextService.isBotComment(TEST_REPOSITORY_ID, TEST_PR_NUMBER, 100L))
+                .thenReturn(true);
+        when(reviewContextService.countBotReplies(TEST_REPOSITORY_ID, TEST_PR_NUMBER))
+                .thenReturn(3);
+        when(apiKeyService.getDecryptedApiKey(1L))
+                .thenReturn(null);
+
+        // when
+        ResponseEntity<String> response = webhookController.handleWebhookEvent(
+                TEST_DELIVERY_ID,
+                "pull_request_review_comment",
+                objectMapper.writeValueAsString(payload)
+        );
+
+        // then
+        assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
+        assertThat(response.getBody()).isEqualTo("Reply processed");
+        verify(userRepositoryService).findActiveUserIdsByRepositoryId(TEST_REPOSITORY_ID);
+        verify(apiKeyService).getDecryptedApiKey(1L);
+        verify(commentResponseService, never()).generateResponse(any(), anyLong(), anyInt(), anyString());
         verify(gitHubReviewClient, never()).replyToReviewComment(anyString(), anyInt(), anyLong(), anyString());
     }
 }

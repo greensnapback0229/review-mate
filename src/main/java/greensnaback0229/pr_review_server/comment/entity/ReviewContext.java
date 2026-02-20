@@ -1,16 +1,15 @@
 package greensnaback0229.pr_review_server.comment.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "review_context", uniqueConstraints = {
     @UniqueConstraint(name = "idx_repo_pr_feature", columnNames = {"repository_id", "pr_number", "feature_name"})
+}, indexes = {
+    @Index(name = "idx_review_context_user_repo_pr", columnList = "user_id, repository_id, pr_number")
 })
 @Getter
 @NoArgsConstructor
@@ -24,6 +23,10 @@ public class ReviewContext {
 
     @Column(name = "repository_id", nullable = false)
     private Long repositoryId;
+
+    @Setter
+    @Column(name = "user_id")
+    private Long userId;
 
     @Column(name = "pr_number", nullable = false)
     private Integer prNumber;

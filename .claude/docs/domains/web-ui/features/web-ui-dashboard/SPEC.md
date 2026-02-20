@@ -1,106 +1,73 @@
-# F16: Web UI Dashboard - SPEC
+# F16: web-ui-dashboard SPEC
 
-## 개요
-사용자의 리뷰 현황을 한눈에 볼 수 있는 대시보드 페이지.
-Repository 목록, 최근 리뷰, 사용량 통계를 표시한다.
+## 상태: **완료**
 
-## 상태: 미구현
-
-## 관련 파일 (예정)
-- `DashboardController.java` - 대시보드 컨트롤러
-- `templates/dashboard.html` - 대시보드 페이지
-- `templates/reviews.html` - 리뷰 히스토리 페이지
-- `templates/fragments/stats-card.html` - 통계 카드 컴포넌트
-
-## 범위 정의
-
-### In-Scope
-- 대시보드 메인 페이지 (요약 통계)
-- 연결된 Repository 목록 + 상태
-- 최근 리뷰 히스토리 (페이징)
-- 월간 사용량 표시 (리뷰 수, 비용, 남은 횟수)
-- Repository별 리뷰 상세 보기
-- PR별 리뷰 결과 상세 보기
-
-### Out-of-Scope
-- 실시간 리뷰 진행 상황 (WebSocket)
-- 차트/그래프 (차후 추가)
-- 리뷰 결과 수정/삭제
+## 목표
+대시보드 웹 UI — 연결된 저장소 목록, 최근 리뷰 이력, 이번 달 사용량 통계를 한 화면에 제공.
+저장소별 상세 페이지에서 리뷰 이력 및 기능별 분포를 페이지네이션과 함께 조회.
 
 ## 의존성
-- **의존**: F8 (review-dashboard) → review_history 데이터
-- **의존**: F12 (repository-management) → Repository 목록
-- **의존**: F13 (usage-tracking) → 사용량 데이터
-- **의존**: F15 (web-ui-auth) → 공통 레이아웃
+- F8 (review-dashboard): ReviewHistoryService, RepositoryStatsResponse
+- F12 (repository-management): UserRepositoryService
+- F13 (usage-tracking): UsageService
+- F15 (web-ui-auth): layout/base.html, 인증 흐름
 
-## 상세 설계
+## 라우트
 
-### 페이지 목록
+| Method | Path | 설명 | 인증 |
+|--------|------|------|------|
+| GET | `/dashboard` | 메인 대시보드 | 필요 |
+| GET | `/repositories/{repositoryId}` | 저장소 상세 + 리뷰 이력 | 필요 |
 
-| URL | 템플릿 | 설명 |
-|-----|--------|------|
-| `/dashboard` | `dashboard.html` | 메인 대시보드 (요약) |
-| `/reviews` | `reviews.html` | 전체 리뷰 히스토리 (페이징) |
-| `/reviews/{repoId}` | `repo-reviews.html` | Repository별 리뷰 |
-| `/reviews/{repoId}/pr/{prNumber}` | `pr-review-detail.html` | PR별 상세 리뷰 |
+## 대시보드 (`/dashboard`)
 
-### 대시보드 레이아웃
-```
-┌──────────────────────────────────────────────────┐
-│  [네비게이션 바]                                    │
-├──────────────────────────────────────────────────┤
-│                                                    │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐           │
-│  │ 총 리뷰   │ │ 이번 달   │ │ 남은 횟수 │           │
-│  │   150    │ │   18/30  │ │    12    │           │
-│  └──────────┘ └──────────┘ └──────────┘           │
-│                                                    │
-│  ┌─ 연결된 Repository ──────────────────────────┐  │
-│  │ owner/repo1  ● Active   42 reviews  [설정]   │  │
-│  │ owner/repo2  ● Active   15 reviews  [설정]   │  │
-│  │ owner/repo3  ○ Inactive  0 reviews  [연결]   │  │
-│  └──────────────────────────────────────────────┘  │
-│                                                    │
-│  ┌─ 최근 리뷰 ─────────────────────────────────┐  │
-│  │ PR #42 "feat: Add auth"  AUTH  ✅ 5 comments │  │
-│  │ PR #41 "fix: payment"   PAY   ✅ 3 comments │  │
-│  │ PR #40 "refactor: user" USER  ❌ Failed      │  │
-│  │                          [더 보기 →]         │  │
-│  └──────────────────────────────────────────────┘  │
-│                                                    │
-│  [푸터]                                            │
-└──────────────────────────────────────────────────┘
-```
-
-### Thymeleaf 모델 데이터
-
-```java
-// DashboardController
-model.addAttribute("stats", usageService.getCurrentMonthStats(userId));
-model.addAttribute("repositories", repoService.getUserRepositories(userId));
-model.addAttribute("recentReviews", reviewService.getRecentReviews(userId, 10));
-```
-
-## 에러 처리 정책
-
-| 상황 | 동작 | 영향 |
+### Model 데이터
+| 속성 | 타입 | 출처 |
 |------|------|------|
-| review_history 조회 실패 | "리뷰 데이터를 불러올 수 없습니다" 표시 | 빈 리뷰 목록 |
-| Repository 목록 조회 실패 | 에러 메시지 표시 | 빈 목록 |
-| 사용량 데이터 없음 | 0으로 표시 | 정상 |
-| 타인의 Repository 접근 | 403 에러 페이지 | 접근 차단 |
+| `user` | `User` | `principal.getUser()` |
+| `repositories` | `List<UserRepository>` | `UserRepositoryService.findActiveRepositoriesByUserId()` |
+| `recentReviews` | `List<ReviewSummaryDto>` | `ReviewHistoryService.getReviewHistory()` (최근 10건) |
+| `usage` | `UsageSummary` | `UsageService.getCurrentMonthUsage()` |
 
-## 테스트 케이스
-1. /dashboard → 대시보드 렌더링 (통계, Repo 목록, 최근 리뷰)
-2. /reviews → 페이징된 리뷰 히스토리
-3. /reviews/{repoId}/pr/{prNumber} → PR 상세 리뷰 (인라인 코멘트 포함)
-4. 타인의 Repository → 403
-5. 데이터 없는 신규 사용자 → 빈 대시보드 + 가이드 메시지
+### UI 구성
+- **통계 카드 4개**: 연결된 저장소 수 / 이번 달 리뷰 수 / 총 토큰(K) / 추정 비용($)
+- **연결된 저장소 목록**: 각 항목 클릭 시 `/repositories/{id}` 이동
+- **최근 리뷰 테이블**: PR 번호, 제목(30자 truncate), 기능명, 상태(완료/실패), 일시
 
-## 완료 조건
-- [ ] 대시보드 메인 페이지 (통계 카드 3개)
-- [ ] Repository 목록 표시
-- [ ] 최근 리뷰 히스토리 (페이징)
-- [ ] PR별 리뷰 상세 페이지
-- [ ] 반응형 디자인
-- [ ] 단위 테스트 5개 이상
+## 저장소 상세 (`/repositories/{repositoryId}`)
+
+### 접근 제어
+- 인증된 사용자의 `userId`로 `findActiveRepositoriesByUserId()` 조회 후 `repositoryId` 필터
+- 해당 사용자에 연결되지 않은 저장소 접근 시 → **HTTP 404** (`ResponseStatusException`)
+
+### Model 데이터
+| 속성 | 타입 | 출처 |
+|------|------|------|
+| `repository` | `UserRepository` | 사용자 저장소 목록에서 필터 |
+| `reviews` | `Page<ReviewSummaryDto>` | `ReviewHistoryService.getReviewsByRepository()` (20건/페이지) |
+| `stats` | `RepositoryStatsResponse` | `ReviewHistoryService.getRepositoryStats()` |
+
+### UI 구성
+- **통계 카드 4개**: 전체 리뷰 수 / 완료 / 실패 / 평균 인라인 댓글
+- **기능별 분포 카드**: `reviewsByFeature` Map 렌더링 + 최근 7일/30일 건수
+- **리뷰 이력 테이블**: PR 번호, 제목(35자), 기능명, 인라인 댓글 수, 상태, 일시
+- **페이지네이션**: `totalPages > 1`일 때만 표시
+
+## SecurityConfig
+`/repositories/**` → `.authenticated()` 규칙 추가
+
+## 구현 파일
+- `web/WebPageController.java` — dashboard/repositoryDetail 메서드 추가
+- `config/SecurityConfig.java` — `/repositories/**` authenticated 추가
+- `templates/dashboard.html` — 통계카드 + 저장소목록 + 최근리뷰
+- `templates/repositories/detail.html` — 통계카드 + 기능분포 + 리뷰테이블 + 페이지네이션
+
+## 테스트 (WebPageControllerTest)
+
+| 케이스 | 결과 |
+|--------|------|
+| 인증 사용자 /dashboard → model(repositories/recentReviews/usage) | ✅ |
+| 미인증 사용자 /dashboard → 302 /login | ✅ |
+| 인증 사용자 본인 저장소 /repositories/{id} → model(repository/reviews/stats) | ✅ |
+| 타인 저장소 /repositories/{id} → 404 | ✅ |
+| 미인증 사용자 /repositories/{id} → 302 /login | ✅ |

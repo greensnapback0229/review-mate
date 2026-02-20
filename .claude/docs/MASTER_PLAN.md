@@ -38,9 +38,10 @@ GitHub PR에 대해 AI 기반 자동 코드 리뷰를 제공하는 서버를 운
 5. 리뷰 언어는 한국어 기본 (프롬프트 한국어)
 6. 사용자 인증은 GitHub OAuth로 처리한다
 7. Repository 연결은 GitHub App 설치 콜백으로 자동화한다
-8. 요금제: 무료 (월 30회 리뷰) / 유료 (무제한, 월 $15 API 비용 상한)
-9. 결제는 Stripe 구독으로 처리한다
+8. **무료 서비스**로 운영한다 (결제 시스템 없음, 사용량 모니터링만)
+9. ~~결제는 Stripe 구독으로 처리한다~~ → **제거됨** (한국 Stripe 미지원)
 10. Web UI는 Spring + Thymeleaf로 구축한다 (동일 백엔드)
+11. **사용자별 Anthropic API Key** 사용 (서비스 레벨 Key 없음, 사용자가 직접 Key 제공)
 
 ### 열린 질문
 - [ ] 리뷰 언어를 Repository별로 설정 가능하게 할 것인가?
@@ -53,11 +54,11 @@ GitHub PR에 대해 AI 기반 자동 코드 리뷰를 제공하는 서버를 운
 | 제약 | 설명 |
 |------|------|
 | **GitHub API Rate Limit** | 5000 req/hour (Installation Token) |
-| **Anthropic API** | Claude Sonnet 4, max 4000 tokens 응답 |
+| **Anthropic API** | Claude Sonnet 4, 사용자별 API Key (서비스 Key 없음) |
 | **인프라** | Docker Compose 기반, MySQL 8.0, 단일 서버 |
 | **인증 (리뷰)** | GitHub App (JWT + Installation Token) |
 | **인증 (사용자)** | GitHub OAuth 2.0 + Spring Security |
-| **결제** | Stripe Subscription (월 $15 상한) |
+| **과금** | 없음 (무료 서비스, 사용량 모니터링만) |
 | **프론트엔드** | Spring + Thymeleaf (동일 서버) |
 | **Java 21** | Spring Boot 3.3.6 |
 
@@ -81,7 +82,7 @@ GitHub PR에 대해 AI 기반 자동 코드 리뷰를 제공하는 서버를 운
 | F5 | **async-processing** | 비동기 리뷰 처리 (Webhook 즉시 응답) | Medium |
 | F6 | **review-customization** | Repository별 리뷰 설정 커스터마이징 | Medium |
 | F7 | **multi-llm-support** | 다중 LLM 지원 (GPT, Gemini 등) | Hard |
-| F8 | **review-dashboard** | 리뷰 히스토리 조회 API / 간단한 대시보드 | Hard |
+| F8 | **review-dashboard** | 리뷰 히스토리 조회 API / 간단한 대시보드 | Hard | **완료** |
 | F9 | **review-comment-reply** | 봇 리뷰 댓글에 대한 대화형 응답 | Hard |
 
 ### Phase 1.5: CI/CD 파이프라인
@@ -94,14 +95,14 @@ GitHub PR에 대해 AI 기반 자동 코드 리뷰를 제공하는 서버를 운
 
 | # | Feature | 설명 | 난이도 |
 |---|---------|------|--------|
-| F10 | **user-auth** | GitHub OAuth 로그인 + Spring Security + 사용자 DB | Hard |
-| F11 | **tenant-isolation** | 기존 데이터 모델에 user_id 추가, 멀티 테넌트 격리 | Hard |
-| F12 | **repository-management** | GitHub App 설치 콜백 → 사용자-Repo 연결, CRUD | Medium |
-| F13 | **usage-tracking** | 사용자별 월간 리뷰 횟수 추적 + API 비용 추정 | Medium |
-| F14 | **pricing-plans** | 무료(30회/월) / 유료(무제한, $15 상한) + Stripe 구독 | Hard |
-| F15 | **web-ui-auth** | Thymeleaf 로그인/회원가입/프로필 페이지 | Medium |
-| F16 | **web-ui-dashboard** | 리뷰 히스토리, 통계, Repository 목록 대시보드 | Medium |
-| F17 | **web-ui-settings** | Repository 설정, Feature Registry 편집기, 플랜 관리 | Hard |
+| F10 | **user-auth** | GitHub OAuth 로그인 + Spring Security + 사용자 DB | Hard | **완료** |
+| F11 | **tenant-isolation** | 기존 데이터 모델에 user_id 추가, 멀티 테넌트 격리 | Hard | **완료** |
+| F12 | **repository-management** | GitHub App 설치 콜백 → 사용자-Repo 연결, CRUD | Medium | **완료** |
+| F13 | **usage-tracking** | 사용자별 월간 리뷰 횟수 추적 (모니터링 전용) | Medium | **완료** |
+| ~~F14~~ | ~~**pricing-plans**~~ | ~~Stripe 구독~~ → **제거됨** (무료 서비스 운영) | - |
+| F15 | **web-ui-auth** | Thymeleaf 로그인/회원가입/프로필 페이지 | Medium | **완료** |
+| F16 | **web-ui-dashboard** | 리뷰 히스토리, 통계, Repository 목록 대시보드 | Medium | **완료** |
+| F17 | **web-ui-settings** | Repository 설정, Feature Registry 편집기 | Medium | **완료** |
 
 ---
 
@@ -148,10 +149,7 @@ F15: web-ui-auth ─────────────────────
     (F10 완료 후, 로그인/프로필 페이지)         │
                                                ▼
 F13: usage-tracking ──────────────────────────────
-    (F12 완료 후, 사용자별 리뷰 카운팅)
-                                                    │
-F14: pricing-plans ─────────────────────────────────
-    (F13 완료 후, Stripe 연동 + 사용량 제한)
+    (F12 완료 후, 사용자별 리뷰 카운팅/모니터링)
 
 F8: review-dashboard ─────────────────────────────
     (review_history 테이블 + 조회 API, F16에 데이터 제공)
@@ -160,7 +158,7 @@ F16: web-ui-dashboard ───────────────────�
     (F12 + F8 완료 후, 대시보드 페이지)
                                                     │
 F17: web-ui-settings ───────────────────────────────
-    (F14 + F16 완료 후, 설정/플랜 관리 페이지)
+    (F16 완료 후, 설정 페이지)
 
 
 P2: 리뷰 품질 향상 + 최적화 (후순위)
@@ -197,11 +195,10 @@ F7: multi-llm-support ───────────────────�
 4. **F11: tenant-isolation** - DB 스키마 마이그레이션 (user_id 추가)
 5. **F12: repository-management** - GitHub App 설치 콜백 + Repo CRUD
 6. **F15: web-ui-auth** - 로그인/회원가입 페이지 (F12와 병렬 가능)
-7. **F13: usage-tracking** - 사용자별 리뷰 횟수/비용 추적
-8. **F14: pricing-plans** - 무료/유료 플랜 + Stripe 구독
-9. **F8: review-dashboard** - review_history 저장 + 조회 API (F16 데이터)
-10. **F16: web-ui-dashboard** - 리뷰 대시보드 페이지
-11. **F17: web-ui-settings** - 설정/Feature Registry 편집/플랜 관리
+7. **F13: usage-tracking** - 사용자별 리뷰 횟수 모니터링
+8. **F8: review-dashboard** - review_history 저장 + 조회 API (F16 데이터)
+9. **F16: web-ui-dashboard** - 리뷰 대시보드 페이지
+10. **F17: web-ui-settings** - 설정/Feature Registry 편집
 
 **P2: 리뷰 품질 향상 + 최적화 (후순위)**
 12. **F3: webhook-security** - HMAC 검증 (독립, 빠르게 완료 가능)
@@ -265,24 +262,23 @@ F7: multi-llm-support ───────────────────�
 | test-coverage | `.claude/docs/domains/infrastructure/features/test-coverage/SPEC.md` | 미구현 |
 | ci-cd-pipeline | `.claude/docs/domains/infrastructure/features/ci-cd-pipeline/SPEC.md` | 미구현 |
 
-### saas 도메인 (멀티 테넌트/과금)
+### saas 도메인 (멀티 테넌트)
 
 | Feature | SPEC 경로 | 상태 |
 |---------|-----------|------|
-| user-auth | `.claude/docs/domains/saas/features/user-auth/SPEC.md` | 미구현 |
-| tenant-isolation | `.claude/docs/domains/saas/features/tenant-isolation/SPEC.md` | 미구현 |
-| repository-management | `.claude/docs/domains/saas/features/repository-management/SPEC.md` | 미구현 |
-| usage-tracking | `.claude/docs/domains/saas/features/usage-tracking/SPEC.md` | 미구현 |
-| pricing-plans | `.claude/docs/domains/saas/features/pricing-plans/SPEC.md` | 미구현 |
+| user-auth | `.claude/docs/domains/saas/features/user-auth/SPEC.md` | **완료** |
+| tenant-isolation | `.claude/docs/domains/saas/features/tenant-isolation/SPEC.md` | **완료** |
+| repository-management | `.claude/docs/domains/saas/features/repository-management/SPEC.md` | **완료** |
+| usage-tracking | `.claude/docs/domains/saas/features/usage-tracking/SPEC.md` | **완료** |
 
 ### web-ui 도메인 (프론트엔드)
 
 | Feature | SPEC 경로 | 상태 |
 |---------|-----------|------|
-| web-ui-auth | `.claude/docs/domains/web-ui/features/web-ui-auth/SPEC.md` | 미구현 |
+| web-ui-auth | `.claude/docs/domains/web-ui/features/web-ui-auth/SPEC.md` | **완료** |
 | web-ui-dashboard | `.claude/docs/domains/web-ui/features/web-ui-dashboard/SPEC.md` | 미구현 |
 | web-ui-settings | `.claude/docs/domains/web-ui/features/web-ui-settings/SPEC.md` | 미구현 |
-| review-dashboard | `.claude/docs/domains/web-ui/features/review-dashboard/SPEC.md` | 미구현 |
+| review-dashboard | `.claude/docs/domains/web-ui/features/review-dashboard/SPEC.md` | **완료** |
 
 의사결정 로그: 각 Feature의 SPEC.md와 동일 경로에 `DECISION_LOG.md`로 관리
 
@@ -321,11 +317,11 @@ F7: multi-llm-support ───────────────────�
 - 리뷰 댓글 응답 → review_context 테이블 + Comment Webhook Handler + 스레드 답글 API
 
 ### Phase 3 (아키텍처 대폭 변경)
-- **인증 체계**: Spring Security + GitHub OAuth2 Client + JWT 세션
-- **DB 마이그레이션**: 기존 테이블에 `user_id` FK 추가, `users` 테이블 신규
-- **멀티 테넌트**: 모든 쿼리에 user_id 조건 추가, 데이터 격리
+- **인증 체계**: Spring Security + GitHub OAuth2 Client + 세션 기반
+- **DB 마이그레이션**: `Repository` Entity에 `user_id` 추가, `users` 테이블 신규
+- **멀티 테넌트**: Repository를 통한 간접 격리 (FeatureMemory, ReviewContext는 Repository FK)
 - **GitHub App 설치 플로우**: 설치 콜백 → 사용자-Repository 자동 연결
-- **사용량 추적**: `usage_log` 테이블, 월간 리뷰 카운팅 + API 비용 추정
-- **결제**: Stripe Checkout + Subscription API, Webhook으로 결제 상태 동기화
+- **사용량 추적**: `usage_log` 테이블, 월간 리뷰 카운팅 (모니터링 전용)
 - **프론트엔드**: Thymeleaf 템플릿 + Bootstrap/Tailwind, 같은 Spring Boot 앱에서 서빙
-- **새 DB 테이블**: `users`, `user_repositories`, `usage_log`, `subscriptions`
+- **새 DB 테이블**: `users`, `user_repositories`, `usage_log`
+- **기존 데이터 마이그레이션**: 기존 데이터는 관리자(첫 번째) 계정에 귀속

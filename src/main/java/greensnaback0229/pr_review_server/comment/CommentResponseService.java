@@ -2,7 +2,11 @@ package greensnaback0229.pr_review_server.comment;
 
 import greensnaback0229.pr_review_server.comment.entity.ReviewContext;
 import greensnaback0229.pr_review_server.llm.LlmClient;
+import greensnaback0229.pr_review_server.llm.dto.LlmCommentResponse;
 import greensnaback0229.pr_review_server.prompt.PromptBuilder;
+import greensnaback0229.pr_review_server.tenant.TenantContext;
+import greensnaback0229.pr_review_server.usage.UsageService;
+import greensnaback0229.pr_review_server.usage.entity.ReviewType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -21,16 +25,18 @@ public class CommentResponseService {
     private final ReviewContextService reviewContextService;
     private final PromptBuilder promptBuilder;
     private final LlmClient llmClient;
+    private final UsageService usageService;
 
     /**
      * PR 코멘트에 대한 응답 생성
      *
+     * @param apiKey Anthropic API 키
      * @param repositoryId 저장소 ID
      * @param prNumber PR 번호
      * @param commentBody 코멘트 내용
      * @return 생성된 응답 (없으면 empty)
      */
-    public Optional<String> generateResponse(Long repositoryId, int prNumber, String commentBody) {
+    public Optional<String> generateResponse(String apiKey, Long repositoryId, int prNumber, String commentBody) {
         try {
             log.info("Generating response for comment on PR {}/#{}", repositoryId, prNumber);
 
@@ -50,15 +56,28 @@ public class CommentResponseService {
             log.debug("User prompt length: {}", userPrompt.length());
 
             // 3. LLM 호출
-            String response = llmClient.generateCommentResponse(systemPrompt, userPrompt);
+            LlmCommentResponse llmResponse = llmClient.generateCommentResponse(apiKey, systemPrompt, userPrompt);
 
-            if (response == null || response.trim().isEmpty()) {
+            if (llmResponse == null || llmResponse.getContent() == null || llmResponse.getContent().trim().isEmpty()) {
                 log.warn("LLM returned empty response");
                 return Optional.empty();
             }
 
-            log.info("Generated response with length: {}", response.length());
-            return Optional.of(response);
+            // 사용량 기록
+            try {
+                Long userId = TenantContext.getCurrentUserId();
+                if (userId != null) {
+                    usageService.recordUsage(userId, repositoryId, prNumber, null,
+                            llmResponse.getInputTokens(), llmResponse.getOutputTokens(),
+                            ReviewType.COMMENT_REPLY);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to record comment reply usage: {}", e.getMessage());
+            }
+
+            log.info("Generated response with length: {}, tokens=({}/{})",
+                    llmResponse.getContent().length(), llmResponse.getInputTokens(), llmResponse.getOutputTokens());
+            return Optional.of(llmResponse.getContent());
 
         } catch (Exception e) {
             log.error("Failed to generate comment response: {}", e.getMessage(), e);

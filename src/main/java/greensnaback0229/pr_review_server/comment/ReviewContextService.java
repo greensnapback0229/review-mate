@@ -10,6 +10,7 @@ import greensnaback0229.pr_review_server.comment.dto.FileContextData;
 import greensnaback0229.pr_review_server.comment.entity.ReviewContext;
 import greensnaback0229.pr_review_server.comment.repository.ReviewContextJpaRepository;
 import greensnaback0229.pr_review_server.llm.dto.InlineComment;
+import greensnaback0229.pr_review_server.tenant.TenantContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -36,6 +37,8 @@ public class ReviewContextService {
                                   String headSha, CollectedCode collectedCode,
                                   AggregatedReview review) {
         try {
+            Long userId = TenantContext.getCurrentUserIdOrThrow();
+
             // file_contexts 생성
             List<FileContextData> fileContexts = buildFileContexts(collectedCode, review.getInlineComments());
             String fileContextsJson = objectMapper.writeValueAsString(fileContexts);
@@ -45,15 +48,16 @@ public class ReviewContextService {
                     ? objectMapper.writeValueAsString(review.getInlineComments())
                     : "[]";
 
-            // 기존 데이터 확인 (동일 repo/PR/feature → upsert)
+            // 기존 데이터 확인 (동일 repo/PR/feature + userId → upsert)
             Optional<ReviewContext> existing = reviewContextJpaRepository
-                    .findByRepositoryIdAndPrNumberAndFeatureName(repositoryId, prNumber, featureName);
+                    .findByRepositoryIdAndPrNumberAndFeatureNameAndUserId(repositoryId, prNumber, featureName, userId);
 
             ReviewContext entity;
             if (existing.isPresent()) {
                 entity = ReviewContext.builder()
                         .id(existing.get().getId())
                         .repositoryId(repositoryId)
+                        .userId(userId)
                         .prNumber(prNumber)
                         .featureName(featureName)
                         .headSha(headSha)
@@ -65,6 +69,7 @@ public class ReviewContextService {
             } else {
                 entity = ReviewContext.builder()
                         .repositoryId(repositoryId)
+                        .userId(userId)
                         .prNumber(prNumber)
                         .featureName(featureName)
                         .headSha(headSha)
@@ -76,8 +81,8 @@ public class ReviewContextService {
             }
 
             reviewContextJpaRepository.save(entity);
-            log.info("Saved review context: repositoryId={}, prNumber={}, feature={}",
-                    repositoryId, prNumber, featureName);
+            log.info("Saved review context: repositoryId={}, prNumber={}, feature={}, userId={}",
+                    repositoryId, prNumber, featureName, userId);
 
         } catch (JsonProcessingException e) {
             log.error("Failed to serialize review context: {}", e.getMessage(), e);
@@ -89,8 +94,9 @@ public class ReviewContextService {
      */
     @Transactional
     public void updateBotCommentIds(Long repositoryId, int prNumber, List<Long> commentIds) {
+        Long userId = TenantContext.getCurrentUserIdOrThrow();
         List<ReviewContext> contexts = reviewContextJpaRepository
-                .findByRepositoryIdAndPrNumber(repositoryId, prNumber);
+                .findByRepositoryIdAndPrNumberAndUserId(repositoryId, prNumber, userId);
 
         for (ReviewContext context : contexts) {
             try {
@@ -123,8 +129,9 @@ public class ReviewContextService {
      * 특정 PR의 리뷰 컨텍스트 조회 (댓글 파일 경로로 매칭되는 Feature)
      */
     public Optional<ReviewContext> findByCommentPath(Long repositoryId, int prNumber, String filePath) {
+        Long userId = TenantContext.getCurrentUserIdOrThrow();
         List<ReviewContext> contexts = reviewContextJpaRepository
-                .findByRepositoryIdAndPrNumber(repositoryId, prNumber);
+                .findByRepositoryIdAndPrNumberAndUserId(repositoryId, prNumber, userId);
 
         for (ReviewContext context : contexts) {
             try {
@@ -148,8 +155,9 @@ public class ReviewContextService {
      * 봇 코멘트 ID인지 확인
      */
     public boolean isBotComment(Long repositoryId, int prNumber, long commentId) {
+        Long userId = TenantContext.getCurrentUserIdOrThrow();
         List<ReviewContext> contexts = reviewContextJpaRepository
-                .findByRepositoryIdAndPrNumber(repositoryId, prNumber);
+                .findByRepositoryIdAndPrNumberAndUserId(repositoryId, prNumber, userId);
 
         for (ReviewContext context : contexts) {
             List<Long> botIds = parseBotCommentIds(context.getBotCommentIds());
@@ -164,8 +172,9 @@ public class ReviewContextService {
      * 봇 응답 수 카운트 (다중 턴 제한용)
      */
     public int countBotReplies(Long repositoryId, int prNumber) {
+        Long userId = TenantContext.getCurrentUserIdOrThrow();
         List<ReviewContext> contexts = reviewContextJpaRepository
-                .findByRepositoryIdAndPrNumber(repositoryId, prNumber);
+                .findByRepositoryIdAndPrNumberAndUserId(repositoryId, prNumber, userId);
 
         int total = 0;
         for (ReviewContext context : contexts) {
@@ -180,8 +189,9 @@ public class ReviewContextService {
      */
     @Transactional
     public void addBotCommentId(Long repositoryId, int prNumber, String featureName, long newCommentId) {
+        Long userId = TenantContext.getCurrentUserIdOrThrow();
         Optional<ReviewContext> contextOpt = reviewContextJpaRepository
-                .findByRepositoryIdAndPrNumberAndFeatureName(repositoryId, prNumber, featureName);
+                .findByRepositoryIdAndPrNumberAndFeatureNameAndUserId(repositoryId, prNumber, featureName, userId);
 
         if (contextOpt.isEmpty()) {
             log.warn("No review context found for repositoryId={}, prNumber={}, feature={}",
@@ -218,7 +228,8 @@ public class ReviewContextService {
      * 특정 PR의 모든 리뷰 컨텍스트 조회
      */
     public List<ReviewContext> findByRepositoryIdAndPrNumber(Long repositoryId, int prNumber) {
-        return reviewContextJpaRepository.findByRepositoryIdAndPrNumber(repositoryId, prNumber);
+        Long userId = TenantContext.getCurrentUserIdOrThrow();
+        return reviewContextJpaRepository.findByRepositoryIdAndPrNumberAndUserId(repositoryId, prNumber, userId);
     }
 
     // === private helpers ===

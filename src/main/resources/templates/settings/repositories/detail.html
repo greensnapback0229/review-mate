@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/base}">
+<head><title>저장소 설정</title></head>
+<body>
+<div layout:fragment="content">
+
+    <!-- 브레드크럼 -->
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/dashboard">대시보드</a></li>
+            <li class="breadcrumb-item"><a th:href="@{/repositories/{id}(id=${repository.repositoryId})}"
+                                           th:text="${repository.repoFullName}">owner/repo</a></li>
+            <li class="breadcrumb-item active">설정</li>
+        </ol>
+    </nav>
+
+    <h2 class="mb-4">
+        <i class="bi bi-gear me-2"></i>저장소 설정
+    </h2>
+
+    <!-- 저장소 정보 카드 -->
+    <div class="card mb-4">
+        <div class="card-header fw-semibold">저장소 정보</div>
+        <div class="card-body">
+            <table class="table table-borderless mb-0">
+                <tr>
+                    <th style="width:180px" class="text-muted">저장소</th>
+                    <td>
+                        <i class="bi bi-github me-1"></i>
+                        <span th:text="${repository.repoFullName}">owner/repo</span>
+                    </td>
+                </tr>
+                <tr>
+                    <th class="text-muted">Repository ID</th>
+                    <td th:text="${repository.repositoryId}">0</td>
+                </tr>
+                <tr>
+                    <th class="text-muted">Installation ID</th>
+                    <td th:text="${repository.installationId ?: '-'}">-</td>
+                </tr>
+                <tr>
+                    <th class="text-muted">연결일</th>
+                    <td th:text="${#temporals.format(repository.createdAt, 'yyyy-MM-dd HH:mm')}">2026-01-01</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    <!-- 활성화 설정 카드 -->
+    <div class="card mb-4">
+        <div class="card-header fw-semibold">리뷰 활성화</div>
+        <div class="card-body">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <p class="mb-1 fw-semibold">PR 자동 리뷰</p>
+                    <p class="text-muted small mb-0">비활성화하면 이 저장소의 PR에 대해 리뷰를 수행하지 않습니다.</p>
+                </div>
+                <div class="form-check form-switch fs-3" style="min-width:60px">
+                    <input class="form-check-input" type="checkbox" role="switch"
+                           id="activeToggle"
+                           th:checked="${repository.isActive}"
+                           onchange="toggleActive(this)">
+                </div>
+            </div>
+            <div id="toggleResult" class="mt-2 small" style="display:none"></div>
+        </div>
+    </div>
+
+    <!-- Feature Registry 카드 -->
+    <div class="card mb-4">
+        <div class="card-header fw-semibold">Feature Registry</div>
+        <div class="card-body">
+            <p class="text-muted mb-3">
+                저장소의 <code>.github/pr-review/feature-registry.yml</code> 파일로 리뷰 기능을 정의합니다.
+            </p>
+            <div class="d-flex gap-2">
+                <a th:href="@{/settings/repositories/{id}/features(id=${repository.repositoryId})}"
+                   class="btn btn-outline-primary btn-sm">
+                    <i class="bi bi-list-ul me-1"></i> Feature 목록 보기
+                </a>
+                <a th:href="'https://github.com/' + ${repository.repoFullName} + '/edit/main/.github/pr-review/feature-registry.yml'"
+                   target="_blank" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-pencil-square me-1"></i> GitHub에서 편집
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- 저장소 삭제/비연결 -->
+    <div class="card border-danger">
+        <div class="card-header text-danger fw-semibold">위험 구역</div>
+        <div class="card-body">
+            <p class="text-muted small mb-3">
+                저장소 연결을 해제하면 이 저장소의 PR 리뷰가 중단됩니다.
+                GitHub App에서 직접 설치를 제거하여 연결을 완전히 해제하세요.
+            </p>
+            <a th:href="'https://github.com/settings/installations/' + ${repository.installationId}"
+               target="_blank" class="btn btn-outline-danger btn-sm">
+                <i class="bi bi-x-circle me-1"></i> GitHub App 설치 관리
+            </a>
+        </div>
+    </div>
+
+</div>
+
+<div layout:fragment="scripts">
+<script th:inline="javascript">
+    const repositoryId = /*[[${repository.repositoryId}]]*/ 0;
+
+    async function toggleActive(checkbox) {
+        const active = checkbox.checked;
+        const resultEl = document.getElementById('toggleResult');
+
+        try {
+            const resp = await fetch(`/api/settings/repositories/${repositoryId}/active`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ active })
+            });
+
+            const data = await resp.json();
+            resultEl.style.display = 'block';
+
+            if (resp.ok) {
+                resultEl.className = 'mt-2 small text-success';
+                resultEl.textContent = data.message;
+            } else {
+                resultEl.className = 'mt-2 small text-danger';
+                resultEl.textContent = '변경에 실패했습니다.';
+                checkbox.checked = !active;
+            }
+        } catch (e) {
+            resultEl.style.display = 'block';
+            resultEl.className = 'mt-2 small text-danger';
+            resultEl.textContent = '네트워크 오류가 발생했습니다.';
+            checkbox.checked = !active;
+        }
+    }
+</script>
+</div>
+</body>
+</html>

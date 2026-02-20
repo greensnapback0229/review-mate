@@ -1,13 +1,16 @@
+server:
+  forward-headers-strategy: native
+
 spring:
   application:
     name: pr-review-server
-  
+
   datasource:
     url: jdbc:mysql://${MYSQL_HOST}/${MYSQL_DATABASE}?useSSL=false&serverTimezone=Asia/Seoul&allowPublicKeyRetrieval=true
     username: ${MYSQL_USERNAME:root}
     password: ${MYSQL_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
-  
+
   jpa:
     hibernate:
       ddl-auto: update
@@ -17,9 +20,25 @@ spring:
         format_sql: true
         dialect: org.hibernate.dialect.MySQLDialect
 
-anthropic:
-  api:
-    key: ${ANTHROPIC_API_KEY}
+  security:
+    oauth2:
+      client:
+        registration:
+          github:
+            client-id: ${GITHUB_OAUTH_CLIENT_ID}
+            client-secret: ${GITHUB_OAUTH_CLIENT_SECRET}
+            scope:
+              - user:email
+              - repo
+              - read:org
+        provider:
+          github:
+            authorization-uri: https://github.com/login/oauth/authorize
+            token-uri: https://github.com/login/oauth/access_token
+            user-info-uri: https://api.github.com/user
+
+encryption:
+  secret-key: ${ENCRYPTION_SECRET_KEY}
 
 github:
   app:

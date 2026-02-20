@@ -1,0 +1,16 @@
+sequenceDiagram
+    participant User as 사용자 (브라우저)
+    participant API as UsageController
+    participant TC as TenantContext
+    participant US as UsageService
+    participant DB as MySQL
+
+    User->>API: GET /api/usage
+    API->>TC: getCurrentUserIdOrThrow()
+    TC-->>API: userId
+    API->>US: getCurrentMonthUsage(userId)
+    US->>DB: SELECT SUM(tokens), COUNT(*) FROM usage_log WHERE user_id=? AND created_at >= ?
+    DB-->>US: 집계 결과
+    US->>US: calculateTotalCost()
+    US-->>API: UsageSummary (reviewCount, tokens, cost)
+    API-->>User: JSON 응답

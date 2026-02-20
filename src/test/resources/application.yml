@@ -2,9 +2,39 @@ spring:
   application:
     name: pr-review-server-test
 
-anthropic:
-  api:
-    key: test-key
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.H2Dialect
+
+  security:
+    oauth2:
+      client:
+        registration:
+          github:
+            client-id: test-client-id
+            client-secret: test-client-secret
+            scope:
+              - user:email
+              - repo
+encryption:
+  secret-key: test-encryption-key-32bytes-long!!
 
 github:
   token: test-token
+  app:
+    id: 123456
+    installation-id: 789012
+    private-key-path: test-private-key.pem
+  webhook:
+    secret: test-webhook-secret

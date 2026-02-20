@@ -1,15 +1,14 @@
 package greensnaback0229.pr_review_server.feature.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "feature_memory")
+@Table(name = "feature_memory", indexes = {
+    @Index(name = "idx_feature_memory_user_repo_feature", columnList = "user_id, repository_id, feature_name")
+})
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
@@ -23,6 +22,10 @@ public class FeatureMemory {
 
     @Column(name = "repository_id", nullable = false)
     private Long repositoryId;
+
+    @Setter
+    @Column(name = "user_id")
+    private Long userId;
 
     @Column(name = "feature_name", nullable = false, length = 100)
     private String featureName;

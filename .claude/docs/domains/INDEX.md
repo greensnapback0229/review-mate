@@ -75,11 +75,10 @@ API 입출력 및 Webhook 처리를 담당하는 도메인.
 
 | Feature | 상태 | 설명 |
 |---------|------|------|
-| [user-auth](saas/features/user-auth/SPEC.md) | 미구현 | GitHub OAuth 로그인 + Spring Security |
+| [user-auth](saas/features/user-auth/SPEC.md) | **완료** | GitHub OAuth 로그인 + Spring Security |
 | [tenant-isolation](saas/features/tenant-isolation/SPEC.md) | 미구현 | DB 마이그레이션 user_id 추가, 멀티 테넌트 격리 |
 | [repository-management](saas/features/repository-management/SPEC.md) | 미구현 | GitHub App 설치 콜백 → 사용자-Repo 연결 |
-| [usage-tracking](saas/features/usage-tracking/SPEC.md) | 미구현 | 사용자별 월간 리뷰 횟수 + API 비용 추정 |
-| [pricing-plans](saas/features/pricing-plans/SPEC.md) | 미구현 | 무료/유료 플랜 + Stripe 구독 |
+| [usage-tracking](saas/features/usage-tracking/SPEC.md) | 미구현 | 사용자별 월간 리뷰 횟수 추적 (모니터링 전용) |
 
 ---
 

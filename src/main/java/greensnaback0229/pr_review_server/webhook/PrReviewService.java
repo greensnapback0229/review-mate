@@ -21,6 +21,11 @@ import greensnaback0229.pr_review_server.parser.PrParser;
 import greensnaback0229.pr_review_server.parser.dto.PrContext;
 import greensnaback0229.pr_review_server.prompt.PromptBuilder;
 import greensnaback0229.pr_review_server.comment.ReviewContextService;
+import greensnaback0229.pr_review_server.review.ReviewHistoryService;
+import greensnaback0229.pr_review_server.review.entity.ReviewStatus;
+import greensnaback0229.pr_review_server.tenant.TenantContext;
+import greensnaback0229.pr_review_server.usage.UsageService;
+import greensnaback0229.pr_review_server.usage.entity.ReviewType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -40,10 +45,13 @@ public class PrReviewService {
 	private final LlmClient llmClient;
 	private final ReviewAggregator reviewAggregator;
 	private final ReviewContextService reviewContextService;
+	private final UsageService usageService;
+	private final ReviewHistoryService reviewHistoryService;
 
 	/**
 	 * PR 리뷰 전체 프로세스 실행
 	 *
+	 * @param apiKey Anthropic API 키
 	 * @param repositoryId GitHub Repository ID
 	 * @param repoFullName 저장소 풀네임 (예: owner/repo)
 	 * @param prNumber PR 번호
@@ -53,7 +61,7 @@ public class PrReviewService {
 	 * @param headBranch Head 브랜치명 (PR 브랜치)
 	 * @return 기능별 집계된 리뷰 결과 목록
 	 */
-	public List<AggregatedReview> reviewPullRequest(Long repositoryId, String repoFullName, int prNumber, String prTitle,
+	public List<AggregatedReview> reviewPullRequest(String apiKey, Long repositoryId, String repoFullName, int prNumber, String prTitle,
 		String prBody, String baseBranch, String headBranch, String headSha) {
 		log.info("Starting PR review for {}/#{} (repositoryId={})", repoFullName, prNumber, repositoryId);
 
@@ -74,7 +82,7 @@ public class PrReviewService {
 
 			// Main features 리뷰
 			for (String feature : prContext.getMainFeatures()) {
-				AggregatedReview review = reviewFeature(repositoryId, repoFullName, prNumber, baseBranch,
+				AggregatedReview review = reviewFeature(apiKey, repositoryId, repoFullName, prNumber, baseBranch,
 					headBranch, headSha, feature, prContext, changedFiles, featureRegistry);
 				if (review != null) {
 					reviews.add(review);
@@ -83,7 +91,7 @@ public class PrReviewService {
 
 			// Related features 리뷰
 			for (String feature : prContext.getRelatedFeatures()) {
-				AggregatedReview review = reviewFeature(repositoryId, repoFullName, prNumber, baseBranch,
+				AggregatedReview review = reviewFeature(apiKey, repositoryId, repoFullName, prNumber, baseBranch,
 					headBranch, headSha, feature, prContext, changedFiles, featureRegistry);
 				if (review != null) {
 					reviews.add(review);
@@ -103,6 +111,7 @@ public class PrReviewService {
 	/**
 	 * 단일 기능에 대한 리뷰 수행
 	 *
+	 * @param apiKey Anthropic API 키
 	 * @param repositoryId GitHub Repository ID
 	 * @param repoFullName 저장소 풀네임
 	 * @param prNumber PR 번호
@@ -114,9 +123,10 @@ public class PrReviewService {
 	 * @param featureRegistry 기능 정의 Map
 	 * @return 집계된 리뷰 결과
 	 */
-	private AggregatedReview reviewFeature(Long repositoryId, String repoFullName, int prNumber, String baseBranch,
+	private AggregatedReview reviewFeature(String apiKey, Long repositoryId, String repoFullName, int prNumber, String baseBranch,
 		String headBranch, String headSha, String feature, PrContext prContext, List<String> changedFiles,
 		Map<String, FeatureDefinition> featureRegistry) {
+		long startTime = System.currentTimeMillis();
 		try {
 			log.info("Reviewing feature: {}", feature);
 
@@ -171,7 +181,19 @@ public class PrReviewService {
 				resolvedFeature, changedFilesMap, coreFilesMap);
 
 			// 7. LLM 리뷰 요청
-			ReviewResponse reviewResponse = llmClient.startReview(systemPrompt, initialPrompt);
+			ReviewResponse reviewResponse = llmClient.startReview(apiKey, systemPrompt, initialPrompt);
+
+			// 7-1. 사용량 기록
+			try {
+				Long userId = TenantContext.getCurrentUserId();
+				if (userId != null) {
+					usageService.recordUsage(userId, repositoryId, prNumber, feature,
+							reviewResponse.getInputTokens(), reviewResponse.getOutputTokens(),
+							ReviewType.PR_REVIEW);
+				}
+			} catch (Exception e) {
+				log.warn("Failed to record usage for feature {}: {}", feature, e.getMessage());
+			}
 
 			// 8. 추가 파일 요청 처리 (필요시)
 			while (reviewResponse.isNeedMoreContext()) {
@@ -195,9 +217,34 @@ public class PrReviewService {
 				log.warn("Failed to save review context for feature {}: {}", feature, e.getMessage());
 			}
 
+			// 11. 리뷰 히스토리 저장 (성공)
+			try {
+				Long userId = TenantContext.getCurrentUserId();
+				if (userId != null) {
+					long duration = System.currentTimeMillis() - startTime;
+					reviewHistoryService.saveReviewHistory(
+							userId, repositoryId, prNumber, prContext.getTitle(), feature,
+							aggregatedReview, duration, ReviewStatus.COMPLETED);
+				}
+			} catch (Exception e) {
+				log.warn("Failed to save review history for feature {}: {}", feature, e.getMessage());
+			}
+
 			return aggregatedReview;
 
 		} catch (Exception e) {
+			// 리뷰 실패 히스토리 저장
+			try {
+				Long userId = TenantContext.getCurrentUserId();
+				if (userId != null) {
+					long duration = System.currentTimeMillis() - startTime;
+					reviewHistoryService.saveReviewHistory(
+							userId, repositoryId, prNumber, prContext.getTitle(), feature,
+							null, duration, ReviewStatus.FAILED);
+				}
+			} catch (Exception ex) {
+				log.warn("Failed to save failed review history: {}", ex.getMessage());
+			}
 			log.error("Failed to review feature {}: {}", feature, e.getMessage(), e);
 			return null;
 		}

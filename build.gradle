@@ -46,11 +46,22 @@ dependencies {
     // Bouncy Castle for reading PEM files
     implementation 'org.bouncycastle:bcpkix-jdk18on:1.77'
     
+    // Spring Security + OAuth2
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
+
+    // Thymeleaf + Layout Dialect
+    implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
+    implementation 'nz.net.ultraq.thymeleaf:thymeleaf-layout-dialect:3.3.0'
+    implementation 'org.thymeleaf.extras:thymeleaf-extras-springsecurity6'
+
     compileOnly 'org.projectlombok:lombok'
 
     annotationProcessor 'org.projectlombok:lombok'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.security:spring-security-test'
+    testRuntimeOnly 'com.h2database:h2'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 

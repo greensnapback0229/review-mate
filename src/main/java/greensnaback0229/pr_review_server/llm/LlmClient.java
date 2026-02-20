@@ -8,10 +8,10 @@ import com.anthropic.models.messages.MessageParam;
 import com.anthropic.models.messages.Model;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import greensnaback0229.pr_review_server.llm.dto.ReviewResponse;
+import greensnaback0229.pr_review_server.llm.dto.LlmCommentResponse;
 import greensnaback0229.pr_review_server.llm.dto.MemorySuggestion;
 import greensnaback0229.pr_review_server.llm.dto.InlineComment;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -28,42 +28,41 @@ import java.util.regex.Pattern;
 @Component
 public class LlmClient {
     
-    private final AnthropicClient client;
     private final ObjectMapper objectMapper;
-    
-    public LlmClient(@Value("${anthropic.api.key}") String apiKey, ObjectMapper objectMapper) {
-        this.client = AnthropicOkHttpClient.builder()
-                .apiKey(apiKey)
-                .build();
+
+    public LlmClient(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
     }
 
     /**
      * 리뷰 시작 (1차 요청)
-     * 
+     *
+     * @param apiKey Anthropic API 키
      * @param systemPrompt 시스템 프롬프트
      * @param userMessage 사용자 메시지
      * @return ReviewResponse
      */
-    public ReviewResponse startReview(String systemPrompt, String userMessage) {
+    public ReviewResponse startReview(String apiKey, String systemPrompt, String userMessage) {
         List<MessageParam> messages = new ArrayList<>();
         messages.add(MessageParam.builder()
                 .role(MessageParam.Role.USER)
                 .content(userMessage)
                 .build());
-        
-        return sendRequest(systemPrompt, messages);
+
+        return sendRequest(apiKey, systemPrompt, messages);
     }
 
     /**
      * 리뷰 계속하기 (2차+ 요청)
-     * 
+     *
+     * @param apiKey Anthropic API 키
      * @param systemPrompt 시스템 프롬프트
      * @param conversationHistory 대화 내역
      * @param additionalContext 추가 컨텍스트
      * @return ReviewResponse
      */
     public ReviewResponse continueReview(
+            String apiKey,
             String systemPrompt,
             List<MessageParam> conversationHistory,
             String additionalContext
@@ -73,35 +72,66 @@ public class LlmClient {
                 .role(MessageParam.Role.USER)
                 .content(additionalContext)
                 .build());
-        
-        return sendRequest(systemPrompt, messages);
+
+        return sendRequest(apiKey, systemPrompt, messages);
     }
 
     /**
      * Claude API 요청 전송
-     * 
+     *
+     * @param apiKey Anthropic API 키
      * @param systemPrompt 시스템 프롬프트
      * @param messages 메시지 리스트
      * @return ReviewResponse
      */
-    private ReviewResponse sendRequest(String systemPrompt, List<MessageParam> messages) {
+    private ReviewResponse sendRequest(String apiKey, String systemPrompt, List<MessageParam> messages) {
+        if (apiKey == null || apiKey.trim().isEmpty()) {
+            log.error("API 키가 제공되지 않았습니다");
+            throw new IllegalArgumentException("API 키는 필수입니다");
+        }
+
         try {
+            AnthropicClient client = AnthropicOkHttpClient.builder()
+                    .apiKey(apiKey)
+                    .build();
+
             MessageCreateParams params = MessageCreateParams.builder()
                     .model(Model.CLAUDE_SONNET_4_20250514)
                     .maxTokens(4000L)
                     .system(systemPrompt)
                     .messages(messages)
                     .build();
-            
+
             Message response = client.messages().create(params);
-            
+
+            // 사용량 추출
+            int inputTokens = 0;
+            int outputTokens = 0;
+            try {
+                inputTokens = (int) response.usage().inputTokens();
+                outputTokens = (int) response.usage().outputTokens();
+                log.info("LLM usage: input={}, output={}", inputTokens, outputTokens);
+            } catch (Exception e) {
+                log.warn("Failed to extract usage from LLM response: {}", e.getMessage());
+            }
+
             // 응답 파싱
             String content = extractContent(response);
             log.info("LLM Response: {}", content);
-            
-            // JSON 추출 및 파싱
-            return parseResponse(content);
-            
+
+            // JSON 추출 및 파싱 + 사용량 포함
+            ReviewResponse reviewResponse = parseResponse(content);
+            return ReviewResponse.builder()
+                    .generalReview(reviewResponse.getGeneralReview())
+                    .inlineComments(reviewResponse.getInlineComments())
+                    .needMoreContext(reviewResponse.isNeedMoreContext())
+                    .requestedFiles(reviewResponse.getRequestedFiles())
+                    .reason(reviewResponse.getReason())
+                    .memorySuggestion(reviewResponse.getMemorySuggestion())
+                    .inputTokens(inputTokens)
+                    .outputTokens(outputTokens)
+                    .build();
+
         } catch (Exception e) {
             log.error("LLM request failed", e);
             throw new RuntimeException("Failed to get review from LLM", e);
@@ -210,14 +240,24 @@ public class LlmClient {
     }
 
     /**
-     * 코멘트 응답 생성
+     * 코멘트 응답 생성 (사용량 포함)
      *
+     * @param apiKey Anthropic API 키
      * @param systemPrompt 시스템 프롬프트
      * @param userPrompt 사용자 프롬프트
-     * @return 생성된 응답 텍스트
+     * @return LlmCommentResponse (응답 텍스트 + 토큰 사용량)
      */
-    public String generateCommentResponse(String systemPrompt, String userPrompt) {
+    public LlmCommentResponse generateCommentResponse(String apiKey, String systemPrompt, String userPrompt) {
+        if (apiKey == null || apiKey.trim().isEmpty()) {
+            log.error("API 키가 제공되지 않았습니다");
+            throw new IllegalArgumentException("API 키는 필수입니다");
+        }
+
         try {
+            AnthropicClient client = AnthropicOkHttpClient.builder()
+                    .apiKey(apiKey)
+                    .build();
+
             MessageCreateParams params = MessageCreateParams.builder()
                     .model(Model.CLAUDE_SONNET_4_20250514)
                     .maxTokens(2000L)
@@ -231,7 +271,19 @@ public class LlmClient {
                     .build();
 
             Message response = client.messages().create(params);
-            return extractContent(response);
+
+            // 사용량 추출
+            int inputTokens = 0;
+            int outputTokens = 0;
+            try {
+                inputTokens = (int) response.usage().inputTokens();
+                outputTokens = (int) response.usage().outputTokens();
+            } catch (Exception e) {
+                log.warn("Failed to extract usage from comment response: {}", e.getMessage());
+            }
+
+            String content = extractContent(response);
+            return new LlmCommentResponse(content, inputTokens, outputTokens);
 
         } catch (Exception e) {
             log.error("Failed to generate comment response", e);

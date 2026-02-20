@@ -1,10 +1,16 @@
 package greensnaback0229.pr_review_server.webhook;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import greensnaback0229.pr_review_server.aggregator.dto.AggregatedReview;
+import greensnaback0229.pr_review_server.auth.ApiKeyService;
 import greensnaback0229.pr_review_server.comment.CommentResponseService;
 import greensnaback0229.pr_review_server.comment.ReviewContextService;
 import greensnaback0229.pr_review_server.github.GitHubReviewClient;
+import greensnaback0229.pr_review_server.installation.InstallationHandler;
+import greensnaback0229.pr_review_server.installation.dto.InstallationWebhookPayload;
 import greensnaback0229.pr_review_server.llm.dto.InlineComment;
+import greensnaback0229.pr_review_server.tenant.TenantContext;
+import greensnaback0229.pr_review_server.tenant.UserRepositoryService;
 import greensnaback0229.pr_review_server.webhook.dto.WebhookPayload;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +39,10 @@ public class WebhookController {
     private final GitHubReviewClient gitHubReviewClient;
     private final ReviewContextService reviewContextService;
     private final CommentResponseService commentResponseService;
+    private final ApiKeyService apiKeyService;
+    private final UserRepositoryService userRepositoryService;
+    private final InstallationHandler installationHandler;
+    private final ObjectMapper objectMapper;
 
     /**
      * 처리된 webhook delivery ID를 추적하는 Set (중복 이벤트 방지)
@@ -47,7 +57,7 @@ public class WebhookController {
     public ResponseEntity<String> handleWebhookEvent(
             @RequestHeader(value = "X-GitHub-Delivery", required = false) String deliveryId,
             @RequestHeader(value = "X-GitHub-Event", required = false) String eventType,
-            @RequestBody WebhookPayload payload) {
+            @RequestBody String rawBody) {
 
         // 중복 이벤트 체크
         if (deliveryId != null && !processedDeliveryIds.add(deliveryId)) {
@@ -55,21 +65,44 @@ public class WebhookController {
             return ResponseEntity.ok("Duplicate delivery ignored");
         }
 
-        log.info("Received webhook: event={}, action={}, deliveryId={}", eventType, payload.getAction(), deliveryId);
+        log.info("Received webhook: event={}, deliveryId={}", eventType, deliveryId);
 
-        // 이벤트 유형별 라우팅
-        if ("pull_request".equals(eventType)) {
-            return handlePullRequestEvent(payload);
-        } else if ("pull_request_review_comment".equals(eventType)) {
-            return handleReviewCommentEvent(payload);
-        } else {
-            log.info("Ignoring event type: {}", eventType);
-            return ResponseEntity.ok("Ignored event: " + eventType);
+        try {
+            // installation 이벤트는 InstallationWebhookPayload로 파싱
+            if ("installation".equals(eventType) || "installation_repositories".equals(eventType)) {
+                InstallationWebhookPayload payload = objectMapper.readValue(rawBody, InstallationWebhookPayload.class);
+                log.info("Processing installation event: action={}", payload.getAction());
+                if ("installation".equals(eventType)) {
+                    if ("created".equals(payload.getAction())) installationHandler.handleCreated(payload);
+                    else if ("deleted".equals(payload.getAction())) installationHandler.handleDeleted(payload);
+                } else {
+                    if ("added".equals(payload.getAction())) installationHandler.handleRepositoriesAdded(payload);
+                    else if ("removed".equals(payload.getAction())) installationHandler.handleRepositoriesRemoved(payload);
+                }
+                return ResponseEntity.ok("Installation event processed");
+            }
+
+            // PR / comment 이벤트는 WebhookPayload로 파싱
+            WebhookPayload payload = objectMapper.readValue(rawBody, WebhookPayload.class);
+            log.info("Received webhook: action={}", payload.getAction());
+
+            if ("pull_request".equals(eventType)) {
+                return handlePullRequestEvent(payload);
+            } else if ("pull_request_review_comment".equals(eventType)) {
+                return handleReviewCommentEvent(payload);
+            } else {
+                log.info("Ignoring event type: {}", eventType);
+                return ResponseEntity.ok("Ignored event: " + eventType);
+            }
+        } catch (Exception e) {
+            log.error("Failed to parse webhook payload: {}", e.getMessage(), e);
+            return ResponseEntity.ok("Failed to parse payload");
         }
     }
 
     /**
      * PR 이벤트 처리 (opened, synchronize → 1차 리뷰)
+     * N:N 다중 사용자 지원: repository에 연결된 모든 활성 사용자에 대해 각각 리뷰 수행
      */
     private ResponseEntity<String> handlePullRequestEvent(WebhookPayload payload) {
         try {
@@ -94,24 +127,48 @@ public class WebhookController {
 
             log.info("Processing PR: {}/#{} - {} (repositoryId={})", repoFullName, prNumber, prTitle, repositoryId);
 
-            // 리뷰 수행
-            List<AggregatedReview> reviews = prReviewService.reviewPullRequest(
-                    repositoryId, repoFullName, prNumber, prTitle, prBody, baseBranch, headBranch, headSha);
-
-            if (reviews.isEmpty()) {
-                log.warn("No reviews generated for {}/#{}", repoFullName, prNumber);
-                return ResponseEntity.ok("No reviews generated");
+            // N:N: repository에 연결된 모든 활성 사용자 조회
+            List<Long> activeUserIds = userRepositoryService.findActiveUserIdsByRepositoryId(repositoryId);
+            if (activeUserIds.isEmpty()) {
+                log.warn("No active users found for repository {} ({})", repoFullName, repositoryId);
+                return ResponseEntity.ok("No active users for repository");
             }
 
-            // GitHub에 리뷰 작성
-            try {
-                postReviews(repositoryId, repoFullName, prNumber, reviews);
-                log.info("Reviews posted successfully for {}/#{}", repoFullName, prNumber);
-            } catch (Exception e) {
-                log.error("Failed to post reviews: {}", e.getMessage(), e);
+            int reviewedCount = 0;
+            for (Long userId : activeUserIds) {
+                try {
+                    TenantContext.setCurrentUserId(userId);
+
+                    // 사용자별 API Key 확인
+                    String apiKey = apiKeyService.getDecryptedApiKey(userId);
+                    if (apiKey == null) {
+                        log.warn("API Key not configured for userId={}, skipping review", userId);
+                        continue;
+                    }
+
+                    // 리뷰 수행
+                    List<AggregatedReview> reviews = prReviewService.reviewPullRequest(
+                            apiKey, repositoryId, repoFullName, prNumber, prTitle, prBody, baseBranch, headBranch, headSha);
+
+                    if (reviews.isEmpty()) {
+                        log.warn("No reviews generated for {}/#{} (userId={})", repoFullName, prNumber, userId);
+                        continue;
+                    }
+
+                    // GitHub에 리뷰 작성
+                    try {
+                        postReviews(repositoryId, repoFullName, prNumber, reviews);
+                        reviewedCount++;
+                        log.info("Reviews posted successfully for {}/#{} (userId={})", repoFullName, prNumber, userId);
+                    } catch (Exception e) {
+                        log.error("Failed to post reviews for userId={}: {}", userId, e.getMessage(), e);
+                    }
+                } finally {
+                    TenantContext.clear();
+                }
             }
 
-            return ResponseEntity.ok("Review completed for PR #" + prNumber);
+            return ResponseEntity.ok("Review completed for PR #" + prNumber + " (" + reviewedCount + " users)");
 
         } catch (Exception e) {
             log.error("Failed to process PR webhook: {}", e.getMessage(), e);
@@ -122,6 +179,7 @@ public class WebhookController {
 
     /**
      * 리뷰 코멘트 이벤트 처리 (pull_request_review_comment created → 봇 답글 감지 → 대화형 응답)
+     * N:N 다중 사용자 지원: 각 사용자의 봇 코멘트에 대해 해당 사용자 컨텍스트로 응답
      */
     private ResponseEntity<String> handleReviewCommentEvent(WebhookPayload payload) {
         try {
@@ -156,54 +214,71 @@ public class WebhookController {
                 return ResponseEntity.ok("Not a reply comment");
             }
 
-            // 3. bot_comment_ids 기반 봇 답글 감지
-            boolean isBotReply = reviewContextService.isBotComment(repositoryId, prNumber, inReplyToId);
-            if (!isBotReply) {
-                log.info("Comment is not a reply to bot comment (in_reply_to_id={})", inReplyToId);
-                return ResponseEntity.ok("Not a reply to bot comment");
-            }
+            // N:N: repository에 연결된 모든 활성 사용자에 대해 봇 답글 감지
+            List<Long> activeUserIds = userRepositoryService.findActiveUserIdsByRepositoryId(repositoryId);
 
-            // 4. 다중 턴 상한 체크
-            int botReplyCount = reviewContextService.countBotReplies(repositoryId, prNumber);
-            if (botReplyCount >= MAX_BOT_REPLIES_PER_PR) {
-                log.info("Bot reply limit reached ({}/{}) for {}/#{}",
-                        botReplyCount, MAX_BOT_REPLIES_PER_PR, repoFullName, prNumber);
-                return ResponseEntity.ok("Bot reply limit reached");
-            }
+            for (Long userId : activeUserIds) {
+                try {
+                    TenantContext.setCurrentUserId(userId);
 
-            log.info("Processing bot reply: {}/#{} commentId={}, in_reply_to={}, path={}",
-                    repoFullName, prNumber, comment.getId(), inReplyToId, comment.getPath());
+                    // 3. bot_comment_ids 기반 봇 답글 감지 (사용자별)
+                    boolean isBotReply = reviewContextService.isBotComment(repositoryId, prNumber, inReplyToId);
+                    if (!isBotReply) {
+                        continue;
+                    }
 
-            // 5. 댓글 파일 경로로 해당 Feature 컨텍스트 조회 + 응답 생성
-            Optional<String> responseOpt = commentResponseService.generateResponse(
-                    repositoryId, prNumber, comment.getBody());
+                    // 4. 다중 턴 상한 체크
+                    int botReplyCount = reviewContextService.countBotReplies(repositoryId, prNumber);
+                    if (botReplyCount >= MAX_BOT_REPLIES_PER_PR) {
+                        log.info("Bot reply limit reached ({}/{}) for {}/#{} (userId={})",
+                                botReplyCount, MAX_BOT_REPLIES_PER_PR, repoFullName, prNumber, userId);
+                        continue;
+                    }
 
-            if (responseOpt.isEmpty()) {
-                log.warn("No response generated for comment on {}/#{}", repoFullName, prNumber);
-                return ResponseEntity.ok("No response generated");
-            }
+                    // 5. API Key 확인
+                    String apiKey = apiKeyService.getDecryptedApiKey(userId);
+                    if (apiKey == null) {
+                        log.warn("API Key not configured for userId={}", userId);
+                        continue;
+                    }
 
-            // 6. GitHub 스레드에 답글 게시
-            String responseText = responseOpt.get();
-            try {
-                long newCommentId = gitHubReviewClient.replyToReviewComment(
-                        repoFullName, prNumber, comment.getId(), responseText);
+                    log.info("Processing bot reply: {}/#{} commentId={}, in_reply_to={}, path={}, userId={}",
+                            repoFullName, prNumber, comment.getId(), inReplyToId, comment.getPath(), userId);
 
-                // 7. 새 봇 코멘트 ID를 review_context에 추가 (다중 턴 지원)
-                Optional<greensnaback0229.pr_review_server.comment.entity.ReviewContext> contextOpt =
-                        reviewContextService.findByCommentPath(repositoryId, prNumber, comment.getPath());
-                if (contextOpt.isPresent()) {
-                    reviewContextService.addBotCommentId(
-                            repositoryId, prNumber, contextOpt.get().getFeatureName(), newCommentId);
+                    // 6. 댓글 파일 경로로 해당 Feature 컨텍스트 조회 + 응답 생성
+                    Optional<String> responseOpt = commentResponseService.generateResponse(
+                            apiKey, repositoryId, prNumber, comment.getBody());
+
+                    if (responseOpt.isEmpty()) {
+                        log.warn("No response generated for comment on {}/#{} (userId={})", repoFullName, prNumber, userId);
+                        continue;
+                    }
+
+                    // 7. GitHub 스레드에 답글 게시
+                    String responseText = responseOpt.get();
+                    try {
+                        long newCommentId = gitHubReviewClient.replyToReviewComment(
+                                repoFullName, prNumber, comment.getId(), responseText);
+
+                        // 8. 새 봇 코멘트 ID를 review_context에 추가 (다중 턴 지원)
+                        Optional<greensnaback0229.pr_review_server.comment.entity.ReviewContext> contextOpt =
+                                reviewContextService.findByCommentPath(repositoryId, prNumber, comment.getPath());
+                        if (contextOpt.isPresent()) {
+                            reviewContextService.addBotCommentId(
+                                    repositoryId, prNumber, contextOpt.get().getFeatureName(), newCommentId);
+                        }
+
+                        log.info("Successfully posted reply (newId={}) to {}/#{} (userId={})",
+                                newCommentId, repoFullName, prNumber, userId);
+                    } catch (Exception e) {
+                        log.error("Failed to post reply to GitHub for userId={}: {}", userId, e.getMessage(), e);
+                    }
+                } finally {
+                    TenantContext.clear();
                 }
-
-                log.info("Successfully posted reply (newId={}) to {}/#{}", newCommentId, repoFullName, prNumber);
-            } catch (Exception e) {
-                log.error("Failed to post reply to GitHub: {}", e.getMessage(), e);
-                return ResponseEntity.ok("Failed to post reply");
             }
 
-            return ResponseEntity.ok("Reply posted successfully");
+            return ResponseEntity.ok("Reply processed");
 
         } catch (Exception e) {
             log.error("Failed to process review comment webhook: {}", e.getMessage(), e);
@@ -260,6 +335,39 @@ public class WebhookController {
 
     private boolean isReviewableAction(String action) {
         return "opened".equals(action) || "synchronize".equals(action);
+    }
+
+    /**
+     * GitHub App Installation Webhook 엔드포인트
+     * installation (created/deleted) 및 installation_repositories (added/removed) 이벤트 처리
+     */
+    @PostMapping("/github/installation")
+    public ResponseEntity<String> handleInstallationEvent(
+            @RequestHeader(value = "X-GitHub-Event", required = false) String eventType,
+            @RequestBody InstallationWebhookPayload payload) {
+
+        log.info("Received installation webhook: event={}, action={}", eventType, payload.getAction());
+
+        try {
+            if ("installation".equals(eventType)) {
+                if ("created".equals(payload.getAction())) {
+                    installationHandler.handleCreated(payload);
+                } else if ("deleted".equals(payload.getAction())) {
+                    installationHandler.handleDeleted(payload);
+                }
+            } else if ("installation_repositories".equals(eventType)) {
+                if ("added".equals(payload.getAction())) {
+                    installationHandler.handleRepositoriesAdded(payload);
+                } else if ("removed".equals(payload.getAction())) {
+                    installationHandler.handleRepositoriesRemoved(payload);
+                }
+            }
+
+            return ResponseEntity.ok("Installation event processed");
+        } catch (Exception e) {
+            log.error("Failed to process installation webhook: {}", e.getMessage(), e);
+            return ResponseEntity.ok("Installation event processing failed");
+        }
     }
 
     @GetMapping("/health")
