@@ -35,9 +35,10 @@ GitHub App 설치 시 사용자-Repository 연결을 자동으로 생성하고, 
 ### Out-of-Scope
 - Repository 설정 편집 (feature registry, custom prompt) → F17에서 구현
 - GitHub App 설치 UI → GitHub 자체 제공 페이지 사용
-- Organization 레벨 일괄 설치 → Phase 2 이후
+- Organization 전체 멤버에게 일괄 배포하는 엔터프라이즈 설치 → Phase 2 이후
 - Repository 통계/차트 → F16(dashboard)에서 구현
 - 수동 Repository 추가 (Webhook 없이) → Phase 2 이후
+- **개인 사용자가 자신이 속한 organization 레포를 추가하는 케이스는 In-Scope** (DL-01 참조)
 
 ## 입력/출력 (Inputs/Outputs)
 
@@ -57,11 +58,12 @@ GitHub App 설치 시 사용자-Repository 연결을 자동으로 생성하고, 
 ## 행위 규칙 (Behavior Rules)
 
 1. **Installation Webhook은 인증 없이 처리**: `/api/webhook/**` 경로는 TenantFilter 제외
-2. **사용자 매핑 실패 시 pending 저장**: `pending_installations` 테이블에 저장 후 가입 시 자동 연결
-3. **중복 연결은 UPSERT**: 같은 `user_id + repository_id`는 기존 레코드 업데이트
-4. **삭제는 Soft Delete**: `is_active = false`로 비활성화, 물리 삭제 안 함
-5. **Repository 조회는 본인 것만**: TenantContext에서 `userId` 추출 → WHERE 조건 추가
-6. **Installation ID 추적**: GitHub App 제거 시 해당 Installation의 모든 Repository 비활성화
+2. **사용자 매핑 3단계 fallback**: `account.id` 직접 조회 → 실패 시 `installationId`로 `user_repositories` 역조회 (organization 레포 추가 케이스) → 실패 시 `pending_installations` 저장 (DL-01)
+3. **미가입 사용자 pending 저장**: `pending_installations` 테이블에 저장 후 가입 시 자동 연결
+4. **중복 연결은 UPSERT**: 같은 `user_id + repository_id`는 기존 레코드 업데이트
+5. **삭제는 Soft Delete**: `is_active = false`로 비활성화, 물리 삭제 안 함
+6. **Repository 조회는 본인 것만**: TenantContext에서 `userId` 추출 → WHERE 조건 추가
+7. **Installation ID 추적**: GitHub App 제거 시 해당 Installation의 모든 Repository 비활성화
 
 ## 상세 설계
 
@@ -393,6 +395,7 @@ public OAuth2User loadUser(OAuth2UserRequest userRequest) {
 | 다른 사용자의 Repository 조회/수정 시도 | 404 Not Found (WHERE user_id 조건으로 필터링) |
 | pending_installations 중복 | Installation ID 기준 UPSERT (재설치 시 덮어쓰기) |
 | Installation 삭제 후 재설치 | `is_active = true`로 재활성화 |
+| **organization 레포 추가** (`account.type=Organization`) | `installationId`로 `user_repositories` 역조회 → userId 찾아 연결 (DL-01) |
 
 ## 에러 처리 정책
 
