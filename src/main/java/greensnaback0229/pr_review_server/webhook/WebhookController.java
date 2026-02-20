@@ -247,7 +247,7 @@ public class WebhookController {
 
                     // 6. 댓글 파일 경로로 해당 Feature 컨텍스트 조회 + 응답 생성
                     Optional<String> responseOpt = commentResponseService.generateResponse(
-                            apiKey, repositoryId, prNumber, comment.getBody());
+                            apiKey, repoFullName, repositoryId, prNumber, comment.getBody());
 
                     if (responseOpt.isEmpty()) {
                         log.warn("No response generated for comment on {}/#{} (userId={})", repoFullName, prNumber, userId);

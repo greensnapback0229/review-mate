@@ -6,6 +6,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Prompt Builder
@@ -205,17 +206,24 @@ public class PromptBuilder {
     }
 
     /**
-     * 코멘트 응답 프롬프트 생성
+     * 코멘트 응답 프롬프트 생성 (HEAD SHA 비교 + 코드 변경 감지 포함)
      *
      * @param commentBody 사용자 코멘트
      * @param contexts 리뷰 컨텍스트 목록
+     * @param currentHeadSha 현재 PR HEAD SHA
+     * @param latestFileContents 변경된 파일의 최신 내용 (변경 없으면 빈 Map)
      * @return 사용자 메시지
      */
-    public String buildCommentResponsePrompt(String commentBody, List<greensnaback0229.pr_review_server.comment.entity.ReviewContext> contexts) {
+    public String buildCommentResponsePrompt(String commentBody,
+                                             List<greensnaback0229.pr_review_server.comment.entity.ReviewContext> contexts,
+                                             String currentHeadSha,
+                                             Map<String, String> latestFileContents) {
         StringBuilder prompt = new StringBuilder();
 
         prompt.append("# 리뷰 컨텍스트\n");
         prompt.append("이전에 작성한 리뷰 내용과 코드 정보입니다.\n\n");
+
+        Set<String> changedFiles = latestFileContents != null ? latestFileContents.keySet() : Set.of();
 
         for (greensnaback0229.pr_review_server.comment.entity.ReviewContext context : contexts) {
             prompt.append("## 기능: ").append(context.getFeatureName()).append("\n\n");
@@ -228,8 +236,21 @@ public class PromptBuilder {
 
             // 파일 컨텍스트 (JSON → 텍스트)
             if (context.getFileContexts() != null) {
-                prompt.append("### 파일 컨텍스트\n");
+                prompt.append("### 파일 컨텍스트 (리뷰 시점 코드, SHA: ")
+                      .append(context.getHeadSha()).append(")\n");
                 prompt.append(context.getFileContexts()).append("\n\n");
+            }
+
+            // 코드 변경 감지 섹션
+            if (!changedFiles.isEmpty() && currentHeadSha != null
+                    && !currentHeadSha.equals(context.getHeadSha())) {
+                prompt.append("### ⚠️ 주의: 리뷰 이후 코드가 변경되었습니다\n");
+                prompt.append("현재 코드 (SHA: ").append(currentHeadSha).append(")\n\n");
+                for (Map.Entry<String, String> entry : latestFileContents.entrySet()) {
+                    prompt.append("#### ").append(entry.getKey()).append("\n");
+                    prompt.append("```\n").append(entry.getValue()).append("\n```\n\n");
+                }
+                prompt.append("변경사항을 반영하여 답변해주세요.\n\n");
             }
 
             // 인라인 코멘트

@@ -213,6 +213,37 @@ public class GitHubReviewClient {
     }
 
     /**
+     * PR의 현재 HEAD SHA 조회 (코드 변경 감지용)
+     *
+     * @param repoFullName 저장소 전체 이름
+     * @param prNumber PR 번호
+     * @return HEAD SHA
+     * @throws IOException GitHub API 호출 실패 시
+     */
+    public String getPrHeadSha(String repoFullName, int prNumber) throws IOException {
+        GitHub github = githubConfig.createGitHubClient(repoFullName);
+        GHRepository repository = github.getRepository(repoFullName);
+        GHPullRequest pullRequest = repository.getPullRequest(prNumber);
+        return pullRequest.getHead().getSha();
+    }
+
+    /**
+     * 특정 SHA의 파일 내용 조회
+     *
+     * @param repoFullName 저장소 전체 이름
+     * @param sha 커밋 SHA
+     * @param filePath 파일 경로
+     * @return 파일 내용
+     * @throws IOException GitHub API 호출 실패 시
+     */
+    public String getFileContent(String repoFullName, String sha, String filePath) throws IOException {
+        GitHub github = githubConfig.createGitHubClient(repoFullName);
+        GHRepository repository = github.getRepository(repoFullName);
+        GHContent content = repository.getFileContent(filePath, sha);
+        return content.getContent();
+    }
+
+    /**
      * PR 리뷰 코멘트에 스레드 답글 작성
      *
      * @param repoFullName 저장소 전체 이름 (예: "owner/repo")
