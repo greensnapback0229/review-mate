@@ -76,15 +76,29 @@ public class InstallationHandler {
             return;
         }
 
+        // 1. account.id로 직접 조회 (개인 설치 케이스)
         Optional<User> userOpt = userJpaRepository.findByGithubId(githubId);
-
         if (userOpt.isPresent()) {
             connectRepositories(userOpt.get().getId(), installationId, added);
             log.info("Added {} repositories for userId={}, installationId={}",
                     added.size(), userOpt.get().getId(), installationId);
-        } else {
-            log.warn("User not found for github_id={} during repositories_added, ignoring", githubId);
+            return;
         }
+
+        // 2. installationId로 기존 user_repositories 역조회 (organization 레포 추가 케이스)
+        Optional<greensnaback0229.pr_review_server.tenant.entity.UserRepository> existingRepo =
+                userRepositoryJpaRepository.findFirstByInstallationId(installationId);
+        if (existingRepo.isPresent()) {
+            Long userId = existingRepo.get().getUserId();
+            connectRepositories(userId, installationId, added);
+            log.info("Added {} org repositories for userId={} via installationId={} (org account_id={})",
+                    added.size(), userId, installationId, githubId);
+            return;
+        }
+
+        // 3. 사용자 미등록 → pending 저장
+        savePending(githubId, installationId, added);
+        log.warn("User not found for github_id={} during repositories_added, saved to pending", githubId);
     }
 
     @Transactional
