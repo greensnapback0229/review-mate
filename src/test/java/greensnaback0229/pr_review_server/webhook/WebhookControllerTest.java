@@ -281,7 +281,7 @@ class WebhookControllerTest {
                 .thenReturn(true);
         when(reviewContextService.countBotReplies(TEST_REPOSITORY_ID, TEST_PR_NUMBER))
                 .thenReturn(3);
-        when(commentResponseService.generateResponse(eq("sk-ant-api03-test-key"), eq(TEST_REPOSITORY_ID), eq(TEST_PR_NUMBER), eq("질문입니다")))
+        when(commentResponseService.generateResponse(eq("sk-ant-api03-test-key"), eq(TEST_REPO_FULL_NAME), eq(TEST_REPOSITORY_ID), eq(TEST_PR_NUMBER), eq("질문입니다")))
                 .thenReturn(Optional.of("답변입니다"));
         when(gitHubReviewClient.replyToReviewComment(TEST_REPO_FULL_NAME, TEST_PR_NUMBER, commentId, "답변입니다"))
                 .thenReturn(600L);
@@ -300,7 +300,7 @@ class WebhookControllerTest {
         assertThat(response.getBody()).isEqualTo("Reply processed");
         verify(userRepositoryService).findActiveUserIdsByRepositoryId(TEST_REPOSITORY_ID);
         verify(apiKeyService).getDecryptedApiKey(1L);
-        verify(commentResponseService).generateResponse(eq("sk-ant-api03-test-key"), eq(TEST_REPOSITORY_ID), eq(TEST_PR_NUMBER), eq("질문입니다"));
+        verify(commentResponseService).generateResponse(eq("sk-ant-api03-test-key"), eq(TEST_REPO_FULL_NAME), eq(TEST_REPOSITORY_ID), eq(TEST_PR_NUMBER), eq("질문입니다"));
         verify(gitHubReviewClient).replyToReviewComment(TEST_REPO_FULL_NAME, TEST_PR_NUMBER, commentId, "답변입니다");
         verify(reviewContextService).addBotCommentId(TEST_REPOSITORY_ID, TEST_PR_NUMBER, "TEST_FEATURE", 600L);
     }
@@ -342,7 +342,7 @@ class WebhookControllerTest {
         // then
         assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
         assertThat(response.getBody()).isEqualTo("Reply processed");
-        verify(commentResponseService, never()).generateResponse(any(), anyLong(), anyInt(), anyString());
+        verify(commentResponseService, never()).generateResponse(any(), anyString(), anyLong(), anyInt(), anyString());
         verify(gitHubReviewClient, never()).replyToReviewComment(anyString(), anyInt(), anyLong(), anyString());
     }
 
@@ -417,7 +417,7 @@ class WebhookControllerTest {
         assertThat(response.getBody()).isEqualTo("Reply processed");
         verify(userRepositoryService).findActiveUserIdsByRepositoryId(TEST_REPOSITORY_ID);
         verify(apiKeyService).getDecryptedApiKey(1L);
-        verify(commentResponseService, never()).generateResponse(any(), anyLong(), anyInt(), anyString());
+        verify(commentResponseService, never()).generateResponse(any(), anyString(), anyLong(), anyInt(), anyString());
         verify(gitHubReviewClient, never()).replyToReviewComment(anyString(), anyInt(), anyLong(), anyString());
     }
 }
