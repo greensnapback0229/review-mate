@@ -147,3 +147,48 @@ PR HEAD SHA 조회는 경량 API(PR 메타데이터 1회)이며, 코드가 변�
 ### 재검토 조건
 
 - 실제 운영 데이터에서 5회 초과 대화가 빈번하게 발생하면 상한 조정 또는 스레드 요약 후 재응답 방식 도입 검토.
+
+---
+
+## DL-06: review_context unique constraint에 user_id 포함 여부
+
+**날짜**: 2026-02-20
+**상태**: 확정
+
+### 컨텍스트
+
+SaaS 배포 후 PR synchronize 이벤트(새 커밋 push)가 발생했을 때 `review_context` 저장 시 `Duplicate entry` 오류가 발생했다. 원인은 unique constraint가 `(repository_id, pr_number, feature_name)` 3컬럼으로 구성되어 `user_id`가 빠져 있는 반면, upsert 조회 쿼리는 `findByRepositoryIdAndPrNumberAndFeatureNameAndUserId`로 4컬럼을 필터링하기 때문이다.
+
+시나리오:
+1. 이전 배포(SaaS 이전) 또는 `user_id`가 NULL인 row가 DB에 존재
+2. 신규 배포에서 synchronize 이벤트 수신
+3. `find(..., userId=1)` → NULL row를 찾지 못함 → INSERT 시도
+4. 이미 `(repo, pr, feature)` 조합이 존재 → **Duplicate entry**
+
+또한 SaaS 설계상 동일 레포지토리에 N:N으로 연결된 여러 사용자가 같은 PR을 각자 독립적으로 리뷰할 수 있어야 한다. 이 경우 user_id가 없는 unique constraint는 두 번째 사용자의 INSERT를 막아 다중 사용자 리뷰 자체가 불가능해진다.
+
+### 고려한 옵션
+
+**A. unique constraint를 `(repository_id, pr_number, feature_name, user_id)`로 변경 (채택)**
+user_id를 포함시켜 사용자별로 독립된 review context row를 허용한다.
+- 장점: 다중 사용자 리뷰 지원, upsert 쿼리와 constraint가 일치하여 논리적 일관성 확보
+- 단점: 기존 NULL user_id row와 신규 user_id row가 공존 → 구 데이터는 조회되지 않아 orphan으로 남음 (허용 가능)
+
+**B. constraint는 유지하고 upsert 쿼리를 user_id 없이 조회**
+find 시 user_id를 필터에서 제외하여 기존 row를 찾아 UPDATE.
+- 단점: 다중 사용자 환경에서 서로 다른 사용자의 review context를 덮어쓰는 심각한 데이터 오염 발생. SaaS 설계 원칙(테넌트 격리)에 위배.
+
+**C. NULL user_id row를 신규 userId로 마이그레이션 후 find**
+upsert 시 user_id 기반 find가 빈 값이면 NULL user_id row도 조회해 adopt.
+- 단점: 구현 복잡도 증가, 어떤 user_id를 adopt해야 하는지 불명확 (다중 사용자 환경에서 모호성 발생).
+
+### 결정: **A - user_id를 unique constraint에 포함**
+
+테넌트 격리 원칙상 review context는 사용자별로 완전히 독립되어야 한다. upsert 쿼리가 이미 `user_id`를 기준으로 동작하므로 constraint와 쿼리를 일치시키는 것이 가장 논리적이며, 코드 변경 없이 constraint 수정만으로 해결된다. 기존 NULL user_id row는 신규 쿼리에 조회되지 않아 orphan으로 남지만 기능에 영향을 주지 않는다.
+
+`ddl-auto: update` 설정으로 배포 시 기존 constraint가 자동으로 DROP되고 새 constraint가 적용된다.
+
+### 재검토 조건
+
+- NULL user_id orphan row가 대량으로 쌓여 스토리지 문제가 발생하면 정리 스크립트 작성 검토.
+- 향후 동일 PR을 여러 사용자가 리뷰하는 N:N 시나리오가 실제 운영에서 빈번해지면 사용자별 review context 병합 또는 대표 컨텍스트 선택 정책 도입 검토.
