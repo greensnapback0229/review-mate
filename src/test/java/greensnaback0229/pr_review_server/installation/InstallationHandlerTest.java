@@ -321,6 +321,116 @@ class InstallationHandlerTest {
         assertThat(saved.getIsActive()).isTrue();
     }
 
+    @Test
+    @DisplayName("handleCreated_org설치시_sender_id로사용자조회")
+    void handleCreated_org설치시_sender_id로사용자조회() {
+        // given: account.id = org ID, sender.id = 실제 설치자 개인 ID
+        Long orgGithubId = 146326836L;
+        User user = User.builder().id(USER_ID).githubId(GITHUB_ID).build();
+        when(userJpaRepository.findByGithubId(GITHUB_ID)).thenReturn(Optional.of(user));
+        when(userRepositoryJpaRepository.findByUserIdAndRepositoryId(eq(USER_ID), anyLong()))
+                .thenReturn(Optional.empty());
+
+        InstallationWebhookPayload payload = InstallationWebhookPayload.builder()
+                .action("created")
+                .installation(InstallationWebhookPayload.Installation.builder()
+                        .id(INSTALLATION_ID)
+                        .account(InstallationWebhookPayload.Account.builder()
+                                .id(orgGithubId).login("my-org").type("Organization").build())
+                        .build())
+                .sender(InstallationWebhookPayload.Sender.builder()
+                        .id(GITHUB_ID).login("user").build())
+                .repositories(Arrays.asList(createRepoInfo(111L, "my-org/repo1")))
+                .build();
+
+        // when
+        installationHandler.handleCreated(payload);
+
+        // then: sender.id(GITHUB_ID)로 조회해서 레포 연결
+        ArgumentCaptor<UserRepository> captor = ArgumentCaptor.forClass(UserRepository.class);
+        verify(userRepositoryJpaRepository).save(captor.capture());
+
+        UserRepository saved = captor.getValue();
+        assertThat(saved.getUserId()).isEqualTo(USER_ID);
+        assertThat(saved.getRepositoryId()).isEqualTo(111L);
+        assertThat(saved.getRepoFullName()).isEqualTo("my-org/repo1");
+
+        verify(pendingInstallationJpaRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("handleCreated_org설치시_사용자미존재_sender_id로pending저장")
+    void handleCreated_org설치시_사용자미존재_sender_id로pending저장() {
+        // given: account.id = org ID, sender.id = 미가입 개인 ID
+        Long orgGithubId = 146326836L;
+        Long personalGithubId = 24725356L;
+        when(userJpaRepository.findByGithubId(personalGithubId)).thenReturn(Optional.empty());
+        when(pendingInstallationJpaRepository.findByInstallationId(INSTALLATION_ID))
+                .thenReturn(Optional.empty());
+
+        InstallationWebhookPayload payload = InstallationWebhookPayload.builder()
+                .action("created")
+                .installation(InstallationWebhookPayload.Installation.builder()
+                        .id(INSTALLATION_ID)
+                        .account(InstallationWebhookPayload.Account.builder()
+                                .id(orgGithubId).login("my-org").type("Organization").build())
+                        .build())
+                .sender(InstallationWebhookPayload.Sender.builder()
+                        .id(personalGithubId).login("user").build())
+                .repositories(Arrays.asList(createRepoInfo(111L, "my-org/repo1")))
+                .build();
+
+        // when
+        installationHandler.handleCreated(payload);
+
+        // then: pending은 org ID가 아닌 실제 설치자(sender.id=personalGithubId)로 저장
+        ArgumentCaptor<PendingInstallation> captor = ArgumentCaptor.forClass(PendingInstallation.class);
+        verify(pendingInstallationJpaRepository).save(captor.capture());
+
+        PendingInstallation saved = captor.getValue();
+        assertThat(saved.getGithubId()).isEqualTo(personalGithubId);
+        assertThat(saved.getInstallationId()).isEqualTo(INSTALLATION_ID);
+
+        verify(userRepositoryJpaRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("handleRepositoriesAdded_org설치시_sender_id로사용자조회")
+    void handleRepositoriesAdded_org설치시_sender_id로사용자조회() {
+        // given: account.id = org ID, sender.id = 실제 설치자
+        Long orgGithubId = 146326836L;
+        User user = User.builder().id(USER_ID).githubId(GITHUB_ID).build();
+        when(userJpaRepository.findByGithubId(GITHUB_ID)).thenReturn(Optional.of(user));
+        when(userRepositoryJpaRepository.findByUserIdAndRepositoryId(eq(USER_ID), anyLong()))
+                .thenReturn(Optional.empty());
+
+        InstallationWebhookPayload payload = InstallationWebhookPayload.builder()
+                .action("added")
+                .installation(InstallationWebhookPayload.Installation.builder()
+                        .id(INSTALLATION_ID)
+                        .account(InstallationWebhookPayload.Account.builder()
+                                .id(orgGithubId).login("my-org").type("Organization").build())
+                        .build())
+                .sender(InstallationWebhookPayload.Sender.builder()
+                        .id(GITHUB_ID).login("user").build())
+                .repositoriesAdded(Arrays.asList(createRepoInfo(555L, "my-org/new-repo")))
+                .build();
+
+        // when
+        installationHandler.handleRepositoriesAdded(payload);
+
+        // then: sender.id로 찾은 userId로 레포 연결
+        ArgumentCaptor<UserRepository> captor = ArgumentCaptor.forClass(UserRepository.class);
+        verify(userRepositoryJpaRepository).save(captor.capture());
+
+        UserRepository saved = captor.getValue();
+        assertThat(saved.getUserId()).isEqualTo(USER_ID);
+        assertThat(saved.getRepositoryId()).isEqualTo(555L);
+        assertThat(saved.getRepoFullName()).isEqualTo("my-org/new-repo");
+
+        verify(pendingInstallationJpaRepository, never()).save(any());
+    }
+
     private InstallationWebhookPayload createPayload(String action,
                                                       List<InstallationWebhookPayload.RepositoryInfo> repos) {
         return InstallationWebhookPayload.builder()
