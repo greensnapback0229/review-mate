@@ -83,7 +83,7 @@ GitHub PR에 대해 AI 기반 자동 코드 리뷰를 제공하는 서버를 운
 | F6 | **review-customization** | Repository별 리뷰 설정 커스터마이징 | Medium |
 | F7 | **multi-llm-support** | 다중 LLM 지원 (GPT, Gemini 등) | Hard |
 | F8 | **review-dashboard** | 리뷰 히스토리 조회 API / 간단한 대시보드 | Hard | **완료** |
-| F9 | **review-comment-reply** | 봇 리뷰 댓글에 대한 대화형 응답 | Hard |
+| F9 | **review-comment-reply** | 봇 리뷰 댓글에 대한 대화형 응답 | Hard | **완료** |
 
 ### Phase 1.5: CI/CD 파이프라인
 
@@ -246,7 +246,7 @@ F7: multi-llm-support ───────────────────�
 |---------|-----------|------|
 | review-quality | `.claude/docs/domains/review/categories/enhancement/features/review-quality/SPEC.md` | 미구현 |
 | two-stage-review | `.claude/docs/domains/review/categories/enhancement/features/two-stage-review/SPEC.md` | 미구현 |
-| review-comment-reply | `.claude/docs/domains/review/categories/enhancement/features/review-comment-reply/SPEC.md` | 미구현 |
+| review-comment-reply | `.claude/docs/domains/review/categories/enhancement/features/review-comment-reply/SPEC.md` | **완료** |
 
 #### config (설정/확장)
 

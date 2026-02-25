@@ -1,27 +1,33 @@
-# GitHub Review Client - SPEC (MVP, 구현 완료)
+# GitHub Review Client - SPEC
 
-## 개요
+## 목적 (Purpose)
+
 GitHub Pull Request Review API를 사용하여 리뷰 코멘트와 인라인 코멘트를 게시하는 클라이언트.
-핵심은 LLM이 반환한 절대 라인 번호를 GitHub API가 요구하는 diff position으로 변환하는 것.
+LLM이 반환한 절대 라인 번호를 그대로 GitHub API에 전달하여 파일의 어느 줄에나 인라인 코멘트를 달 수 있다. (DL-01)
 
-## 상태: 구현 완료
+## 상태: 구현 완료 (DL-01 적용 예정)
 
 ## 관련 파일
 - `GitHubReviewClient.java` - Review API 클라이언트
 - `GitHubCommentService.java` - 단순 코멘트 서비스 (레거시, 현재 미사용)
+- `build.gradle` - `github-api:1.330` (DL-01 업그레이드 대상)
 
 ## 범위 정의
 
 ### In-Scope
 - GitHub Pull Request Review API를 통한 리뷰 게시
-- 절대 라인 번호 → diff position 변환 (parsePatch)
+- 절대 라인 번호 기반 Inline comment 게시 (`singleLineComment`)
 - Inline comments + General review 동시 게시
 - COMMENT 이벤트로 리뷰 제출
+- PR HEAD SHA 조회 (코드 변경 감지용)
+- 특정 SHA의 파일 내용 조회
+- 리뷰 코멘트 스레드 답글 작성
 
 ### Out-of-Scope
 - APPROVE / REQUEST_CHANGES 이벤트
 - 리뷰 수정/삭제
-- 리뷰 스레드 대화
+- 삭제된 라인(old file 기준 LEFT side)에 대한 코멘트 → DL-01 재검토 조건 참고
+- Multiline comment (여러 줄 범위 지정) → 필요 시 `multiLineComment()` API 확장 가능
 
 ## 의존성
 - **의존**: `GitHubConfig` → GitHub 클라이언트 생성
@@ -30,7 +36,7 @@ GitHub Pull Request Review API를 사용하여 리뷰 코멘트와 인라인 코
 
 ## 시퀀스 다이어그램
 
-### 리뷰 게시 흐름
+### 리뷰 게시 흐름 (DL-01 적용 후)
 ```mermaid
 sequenceDiagram
     participant WC as WebhookController
@@ -45,29 +51,19 @@ sequenceDiagram
     Auth-->>GCfg: token
     GCfg-->>GRC: GitHub client
 
-    GRC->>GH: PR.listFiles()
-    GH-->>GRC: 변경 파일 목록 + patch
-    GRC->>GRC: buildLineToPositionMap()
-
-    loop 각 파일의 patch
-        GRC->>GRC: parsePatch(patch)
-        Note over GRC: 라인번호 → diff position 변환
-    end
+    GRC->>GH: repository.getPullRequest(prNumber)
+    GH-->>GRC: GHPullRequest
 
     GRC->>GRC: GHPullRequestReviewBuilder 생성
+    GRC->>GRC: reviewBuilder.body(generalComment)
 
     loop 각 inlineComment
-        GRC->>GRC: lineToPositionMap에서 position 조회
-        alt position 있음
-            GRC->>GRC: reviewBuilder.comment(body, path, position)
-        else position 없음
-            GRC->>GRC: 경고 로그 + 스킵
-        end
+        GRC->>GRC: reviewBuilder.singleLineComment(body, path, line)
     end
 
     GRC->>GH: reviewBuilder.event(COMMENT).create()
-    GH-->>GRC: Review 생성 완료
-    GRC-->>WC: void
+    GH-->>GRC: GHPullRequestReview
+    GRC-->>WC: List<Long> commentIds
 ```
 
 ## 주요 메서드
@@ -77,90 +73,62 @@ PR에 Review를 생성하고 제출:
 ```
 1. GitHub 클라이언트 생성 (GitHubConfig)
 2. PR 조회
-3. inlineComments가 있으면 → buildLineToPositionMap() 호출
-4. GHPullRequestReviewBuilder 생성
-5. generalComment → reviewBuilder.body()
-6. 각 inlineComment:
-   - lineToPositionMap에서 파일+라인 → position 변환
-   - position 못 찾으면 → 경고 로그 + 스킵
-   - reviewBuilder.comment(body, path, position)
-7. reviewBuilder.event(COMMENT).create() → 즉시 게시
+3. GHPullRequestReviewBuilder 생성
+4. generalComment → reviewBuilder.body()
+5. 각 inlineComment:
+   - reviewBuilder.singleLineComment(body, path, line)
+6. reviewBuilder.event(COMMENT).create() → 즉시 게시
+7. 생성된 review의 commentId 목록 반환
 ```
 
 ### createSimpleComment(repoFullName, prNumber, comment)
 - 인라인 코멘트 없이 전체 코멘트만 작성
 - 내부적으로 `createReview(repo, pr, comment, List.of())` 호출
 
-### buildLineToPositionMap(pullRequest) [private]
-PR의 모든 변경 파일의 라인→position 매핑 생성:
-```
-PR.listFiles() → 각 파일별로:
-  - file.getPatch() → diff 텍스트
-  - parsePatch(patch) → Map<line, position>
-  - result.put(filename, lineToPosition)
-```
+### getPrHeadSha(repoFullName, prNumber)
+- PR의 현재 HEAD SHA 반환
+- 코드 변경 감지 용도
 
-### parsePatch(patch) [private] - 핵심 알고리즘
-diff 텍스트를 파싱하여 라인 번호 → diff position 매핑 생성:
+### getFileContent(repoFullName, sha, filePath)
+- 특정 SHA 기준 파일 내용 반환
 
-```
-입력: diff patch 문자열
-출력: Map<Integer, Integer> (라인번호 → position)
+### replyToReviewComment(repoFullName, prNumber, commentId, replyBody)
+- 특정 리뷰 코멘트 스레드에 답글 작성
+- `targetComment.reply(replyBody)` 호출
+- 새로 생성된 commentId 반환 (다중 턴 감지용)
 
-알고리즘:
-position = 0 (1-based 카운터)
-currentLine = 0 (파일의 현재 라인 번호)
+## DL-01: position → line 전환 배경
 
-각 diff 라인에 대해:
-  position++
+기존 구현(`parsePatch`)은 diff hunk 범위 안에 있는 라인만 position으로 변환할 수 있었다.
+LLM은 `addLineNumbers()`로 전달받은 전체 파일 코드를 보고 임의의 라인을 지목하므로,
+hunk 밖 라인에 대한 코멘트가 누락되는 문제가 발생했다.
 
-  @@ hunk header → currentLine = +시작라인 추출, continue
-  "+" 시작 (추가된 라인) → map.put(currentLine, position), currentLine++
-  "-" 시작 (삭제된 라인) → position만 증가 (파일에 없으므로 매핑 안 함)
-  그 외 (context 라인) → map.put(currentLine, position), currentLine++
-```
+`kohsuke/github-api 1.330`의 `singleLineComment(body, path, line)` API를 사용하면
+diff position 변환 없이 파일의 어느 줄에나 코멘트를 달 수 있다.
 
-**Hunk header 정규식:**
-```
-^@@\s+-\d+,?\d*\s+\+(\d+),?\d*\s+@@
-```
-- `+(\d+)` 에서 새 파일의 시작 라인 번호 추출
-
-**예시:**
-```diff
-@@ -3,5 +3,7 @@ class User {     ← position=1, currentLine=3
-  private String name;             ← position=2, line 3→pos 2
-  private int age;                 ← position=3, line 4→pos 3
-+ private String email;            ← position=4, line 5→pos 4 (추가)
-+ private boolean active;          ← position=5, line 6→pos 5 (추가)
-                                   ← position=6, line 7→pos 6
-  public void setName() {          ← position=7, line 8→pos 7
-```
-
-결과: `{3:2, 4:3, 5:4, 6:5, 7:6, 8:7}`
-
-## GitHubCommentService (레거시)
-- `postReviewComment()` - PR에 단순 이슈 코멘트 작성
-- Review API가 아닌 `pullRequest.comment()` 사용
-- inline comments 불가
-- 현재 WebhookController에서 사용하지 않음
+자세한 내용 → [DECISION_LOG.md DL-01](DECISION_LOG.md)
 
 ## 에러 처리 정책
 
 | 상황 | 동작 | 영향 |
 |------|------|------|
-| GitHub API 인증 실패 (401) | 예외 전파 → 리뷰 게시 실패 | 리뷰 미게시 (리뷰 자체는 완료) |
+| GitHub API 인증 실패 (401) | 예외 전파 → 리뷰 게시 실패 | 리뷰 미게시 |
 | PR 조회 실패 (404) | 예외 전파 | 리뷰 게시 실패 |
-| patch null (바이너리/이름변경) | 해당 파일 스킵 | 해당 파일 inline 코멘트 불가 |
-| 라인→position 매핑 실패 | 해당 inline 코멘트 스킵 + 경고 로그 | 일부 코멘트 누락 |
+| 유효하지 않은 라인 번호 (422) | 해당 inline 코멘트 스킵 + 에러 로그 | 일부 코멘트 누락 |
+| patch null (바이너리/이름변경) | 해당 인라인 코멘트 스킵 | 해당 파일 inline 코멘트 불가 |
 | Review 생성 API 실패 | 예외 전파 → WebhookController에서 catch | 리뷰 미게시, 200 OK 반환 |
 | Rate Limit 초과 | 예외 전파 | 리뷰 게시 실패 |
 
-## 테스트 현황
-- **없음** (향후 F4에서 `parsePatch` 중심으로 추가 예정)
+## 테스트 전략
+
+### 단위 테스트
+- `createReview()` — `singleLineComment()` 호출 횟수/인자 검증 (Mock GH 클라이언트)
+- `replyToReviewComment()` — 대상 코멘트 찾기 + reply 호출 검증
+
+### 통합 테스트
+- 실제 GitHub API 호출은 수동 테스트로 검증 (GitHub App 설치 환경 필요)
 
 ## 알려진 제한
-- 삭제된 라인에는 코멘트 불가 (position 매핑 안 함)
-- 다중 hunk가 있는 diff에서 position 재계산 (정상 동작하지만 복잡)
-- patch가 null인 파일 (바이너리, 이름 변경만) 스킵
+- 삭제된 라인(old file, LEFT side) 코멘트 미지원 → v2.0 stable 후 `side` 파라미터 추가 검토
 - Review 이벤트가 COMMENT 고정 (APPROVE, REQUEST_CHANGES 미지원)
+- patch가 null인 파일 (바이너리, 이름 변경만) 스킵

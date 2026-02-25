@@ -326,6 +326,51 @@ class ReviewContextServiceTest {
     }
 
     @Test
+    @DisplayName("TC5: 다중 턴 - 봇 답글 ID 누적 후 후속 답글 감지")
+    void isBotComment_다중턴_누적된봇ID감지() throws JsonProcessingException {
+        // given: 1차 리뷰 ID [100, 101] + 봇 1차 답글 [200] + 봇 2차 답글 [300] 누적
+        ReviewContext context = ReviewContext.builder()
+                .id(1L)
+                .repositoryId(TEST_REPOSITORY_ID)
+                .prNumber(TEST_PR_NUMBER)
+                .featureName(TEST_FEATURE_NAME)
+                .headSha(TEST_HEAD_SHA)
+                .fileContexts("[]")
+                .generalReview("리뷰")
+                .inlineComments("[]")
+                .botCommentIds("[100, 101, 200, 300]")
+                .build();
+
+        when(reviewContextJpaRepository.findByRepositoryIdAndPrNumberAndUserId(
+                TEST_REPOSITORY_ID, TEST_PR_NUMBER, TEST_USER_ID))
+                .thenReturn(Arrays.asList(context));
+
+        // when & then: 1차 리뷰 ID와 봇 답글 ID 모두 감지 가능
+        assertThat(reviewContextService.isBotComment(TEST_REPOSITORY_ID, TEST_PR_NUMBER, 100L)).isTrue();
+        assertThat(reviewContextService.isBotComment(TEST_REPOSITORY_ID, TEST_PR_NUMBER, 200L)).isTrue();
+        assertThat(reviewContextService.isBotComment(TEST_REPOSITORY_ID, TEST_PR_NUMBER, 300L)).isTrue();
+        // 개발자 코멘트 ID는 감지되지 않음
+        assertThat(reviewContextService.isBotComment(TEST_REPOSITORY_ID, TEST_PR_NUMBER, 999L)).isFalse();
+    }
+
+    @Test
+    @DisplayName("addBotCommentId_없는컨텍스트_로그만남기고무시")
+    void addBotCommentId_없는컨텍스트_로그만남기고무시() {
+        // given
+        when(reviewContextJpaRepository.findByRepositoryIdAndPrNumberAndFeatureNameAndUserId(
+                TEST_REPOSITORY_ID, TEST_PR_NUMBER, TEST_FEATURE_NAME, TEST_USER_ID))
+                .thenReturn(Optional.empty());
+
+        // when - 예외 없이 종료
+        assertThatCode(() ->
+            reviewContextService.addBotCommentId(TEST_REPOSITORY_ID, TEST_PR_NUMBER, TEST_FEATURE_NAME, 999L)
+        ).doesNotThrowAnyException();
+
+        // then - save 호출되지 않음
+        verify(reviewContextJpaRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("findByCommentPath_파일경로매칭")
     void findByCommentPath_파일경로매칭() throws JsonProcessingException {
         // given

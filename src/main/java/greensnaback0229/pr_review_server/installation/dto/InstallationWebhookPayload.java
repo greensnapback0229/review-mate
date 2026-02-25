@@ -18,6 +18,8 @@ public class InstallationWebhookPayload {
 
     private Installation installation;
 
+    private Sender sender;
+
     private List<RepositoryInfo> repositories;
 
     @JsonProperty("repositories_added")
@@ -47,6 +49,17 @@ public class InstallationWebhookPayload {
         private Long id;
         private String login;
         private String type;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class Sender {
+        private Long id;
+        private String login;
     }
 
     @Getter

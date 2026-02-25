@@ -15,8 +15,8 @@ GitHub App 설치 시 사용자-Repository 연결을 자동으로 생성하고, 
 ![Repository 해제 흐름](assets/deactivate-flow.png)
 
 ### 흐름 요약
-1. **GitHub App 설치**: `installation` Webhook → `account.id`로 사용자 조회 → `user_repositories` 생성
-2. **사용자 미가입**: `pending_installations` 테이블에 임시 저장 → 가입 후 자동 연결
+1. **GitHub App 설치**: `installation` Webhook → `resolveInstallerGithubId()`로 사용자 조회 (org 설치 시 `sender.id` 우선) → `user_repositories` 생성
+2. **사용자 미가입**: `pending_installations` 테이블에 임시 저장 (githubId = sender.id) → 가입 후 자동 연결
 3. **Repository 조회**: TenantContext에서 `userId` 추출 → 해당 사용자의 활성 Repository만 반환
 4. **Repository 해제**: `is_active = false` 업데이트 (soft delete)
 
@@ -35,9 +35,10 @@ GitHub App 설치 시 사용자-Repository 연결을 자동으로 생성하고, 
 ### Out-of-Scope
 - Repository 설정 편집 (feature registry, custom prompt) → F17에서 구현
 - GitHub App 설치 UI → GitHub 자체 제공 페이지 사용
-- Organization 레벨 일괄 설치 → Phase 2 이후
+- Organization 전체 멤버에게 일괄 배포하는 엔터프라이즈 설치 → Phase 2 이후
 - Repository 통계/차트 → F16(dashboard)에서 구현
 - 수동 Repository 추가 (Webhook 없이) → Phase 2 이후
+- **개인 사용자가 자신이 속한 organization 레포를 추가하는 케이스는 In-Scope** (DL-01 참조)
 
 ## 입력/출력 (Inputs/Outputs)
 
@@ -57,11 +58,12 @@ GitHub App 설치 시 사용자-Repository 연결을 자동으로 생성하고, 
 ## 행위 규칙 (Behavior Rules)
 
 1. **Installation Webhook은 인증 없이 처리**: `/api/webhook/**` 경로는 TenantFilter 제외
-2. **사용자 매핑 실패 시 pending 저장**: `pending_installations` 테이블에 저장 후 가입 시 자동 연결
-3. **중복 연결은 UPSERT**: 같은 `user_id + repository_id`는 기존 레코드 업데이트
-4. **삭제는 Soft Delete**: `is_active = false`로 비활성화, 물리 삭제 안 함
-5. **Repository 조회는 본인 것만**: TenantContext에서 `userId` 추출 → WHERE 조건 추가
-6. **Installation ID 추적**: GitHub App 제거 시 해당 Installation의 모든 Repository 비활성화
+2. **사용자 매핑 전략 (DL-01)**: org 설치 시 `sender.id`(실제 설치자) 우선, 개인 설치 시 `account.id` 사용 → 조회 실패 시 `installationId`로 `user_repositories` 역조회 → 그것도 없으면 `sender.id`(또는 `account.id`)로 `pending_installations` 저장
+3. **미가입 사용자 pending 저장**: `pending_installations` 테이블에 저장 후 가입 시 자동 연결
+4. **중복 연결은 UPSERT**: 같은 `user_id + repository_id`는 기존 레코드 업데이트
+5. **삭제는 Soft Delete**: `is_active = false`로 비활성화, 물리 삭제 안 함
+6. **Repository 조회는 본인 것만**: TenantContext에서 `userId` 추출 → WHERE 조건 추가
+7. **Installation ID 추적**: GitHub App 제거 시 해당 Installation의 모든 Repository 비활성화
 
 ## 상세 설계
 
@@ -71,7 +73,7 @@ GitHub App 설치 시 사용자-Repository 연결을 자동으로 생성하고, 
 ```sql
 CREATE TABLE pending_installations (
     id              BIGINT AUTO_INCREMENT PRIMARY KEY,
-    github_id       BIGINT NOT NULL,              -- installation.account.id
+    github_id       BIGINT NOT NULL,              -- org 설치 시 sender.id(실제 설치자), 개인 설치 시 account.id
     installation_id BIGINT NOT NULL,
     repositories    JSON NOT NULL,                 -- [{id, full_name}, ...]
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -393,6 +395,8 @@ public OAuth2User loadUser(OAuth2UserRequest userRequest) {
 | 다른 사용자의 Repository 조회/수정 시도 | 404 Not Found (WHERE user_id 조건으로 필터링) |
 | pending_installations 중복 | Installation ID 기준 UPSERT (재설치 시 덮어쓰기) |
 | Installation 삭제 후 재설치 | `is_active = true`로 재활성화 |
+| **org App 설치** (`account.type=Organization`, 첫 설치) | `sender.id`(개인 GitHub ID)로 사용자 조회 → 없으면 `sender.id`로 pending 저장 (DL-01) |
+| **org 레포 추가** (설치 이미 있음) | `sender.id`로 사용자 조회 → 없으면 `installationId` 역조회 → 없으면 pending 저장 (DL-01) |
 
 ## 에러 처리 정책
 
@@ -409,9 +413,14 @@ public OAuth2User loadUser(OAuth2UserRequest userRequest) {
 
 ### 단위 테스트
 1. **InstallationHandler**:
-   - `handleCreated()` (사용자 존재) → `user_repositories` 생성 확인
-   - `handleCreated()` (사용자 미존재) → `pending_installations` 저장 확인
+   - `handleCreated()` (개인 설치, 사용자 존재) → `user_repositories` 생성 확인
+   - `handleCreated()` (개인 설치, 사용자 미존재) → `pending_installations` 저장 확인
+   - `handleCreated()` (org 설치, sender.id로 사용자 존재) → `user_repositories` 생성 확인
+   - `handleCreated()` (org 설치, sender.id로 사용자 미존재) → `pending_installations`에 `sender.id`로 저장
    - `handleDeleted()` → 해당 Installation의 Repository 비활성화 확인
+   - `handleRepositoriesAdded()` (org 계정, sender.id로 사용자 존재) → `user_repositories` 생성 확인
+   - `handleRepositoriesAdded()` (org 계정, sender 없음 → installationId 역조회 성공) → userId 찾아 연결
+   - `handleRepositoriesAdded()` (org 계정, sender 없음 → 역조회 실패) → pending 저장
 2. **RepositoryService**:
    - `findActiveRepositories()` → 해당 사용자의 활성 Repository만 반환
    - `deactivate()` → `is_active = false` 업데이트 확인

@@ -29,7 +29,6 @@ public class InstallationHandler {
 
     @Transactional
     public void handleCreated(InstallationWebhookPayload payload) {
-        Long githubId = payload.getInstallation().getAccount().getId();
         Long installationId = payload.getInstallation().getId();
         List<InstallationWebhookPayload.RepositoryInfo> repositories = payload.getRepositories();
 
@@ -38,7 +37,10 @@ public class InstallationHandler {
             return;
         }
 
-        Optional<User> userOpt = userJpaRepository.findByGithubId(githubId);
+        // org 설치의 경우 account.id가 org ID이므로 sender.id(실제 설치자)를 우선 사용
+        Long lookupGithubId = resolveInstallerGithubId(payload);
+
+        Optional<User> userOpt = userJpaRepository.findByGithubId(lookupGithubId);
 
         if (userOpt.isPresent()) {
             User user = userOpt.get();
@@ -46,8 +48,8 @@ public class InstallationHandler {
             log.info("Connected {} repositories for userId={}, installationId={}",
                     repositories.size(), user.getId(), installationId);
         } else {
-            savePending(githubId, installationId, repositories);
-            log.warn("User not found for github_id={}, saved to pending_installations", githubId);
+            savePending(lookupGithubId, installationId, repositories);
+            log.warn("User not found for github_id={}, saved to pending_installations", lookupGithubId);
         }
     }
 
@@ -68,7 +70,6 @@ public class InstallationHandler {
 
     @Transactional
     public void handleRepositoriesAdded(InstallationWebhookPayload payload) {
-        Long githubId = payload.getInstallation().getAccount().getId();
         Long installationId = payload.getInstallation().getId();
         List<InstallationWebhookPayload.RepositoryInfo> added = payload.getRepositoriesAdded();
 
@@ -76,15 +77,32 @@ public class InstallationHandler {
             return;
         }
 
-        Optional<User> userOpt = userJpaRepository.findByGithubId(githubId);
+        // org 설치의 경우 account.id가 org ID이므로 sender.id(실제 설치자)를 우선 사용
+        Long lookupGithubId = resolveInstallerGithubId(payload);
 
+        // 1. sender.id(또는 account.id)로 직접 조회
+        Optional<User> userOpt = userJpaRepository.findByGithubId(lookupGithubId);
         if (userOpt.isPresent()) {
             connectRepositories(userOpt.get().getId(), installationId, added);
             log.info("Added {} repositories for userId={}, installationId={}",
                     added.size(), userOpt.get().getId(), installationId);
-        } else {
-            log.warn("User not found for github_id={} during repositories_added, ignoring", githubId);
+            return;
         }
+
+        // 2. installationId로 기존 user_repositories 역조회 (이미 연결된 레포가 있는 케이스)
+        Optional<greensnaback0229.pr_review_server.tenant.entity.UserRepository> existingRepo =
+                userRepositoryJpaRepository.findFirstByInstallationId(installationId);
+        if (existingRepo.isPresent()) {
+            Long userId = existingRepo.get().getUserId();
+            connectRepositories(userId, installationId, added);
+            log.info("Added {} repositories for userId={} via installationId={} reverse lookup (lookupId={})",
+                    added.size(), userId, installationId, lookupGithubId);
+            return;
+        }
+
+        // 3. 사용자 미등록 → pending 저장
+        savePending(lookupGithubId, installationId, added);
+        log.warn("User not found for github_id={} during repositories_added, saved to pending", lookupGithubId);
     }
 
     @Transactional
@@ -118,6 +136,22 @@ public class InstallationHandler {
         } catch (JsonProcessingException e) {
             log.error("Failed to parse pending repositories JSON: {}", e.getMessage(), e);
         }
+    }
+
+    /**
+     * org 설치 시 account.id는 org ID이므로, sender가 존재하면 sender.id(실제 설치자)를 반환.
+     * 개인 설치 또는 sender가 없으면 account.id를 반환.
+     */
+    private Long resolveInstallerGithubId(InstallationWebhookPayload payload) {
+        InstallationWebhookPayload.Account account = payload.getInstallation().getAccount();
+        InstallationWebhookPayload.Sender sender = payload.getSender();
+
+        if ("Organization".equals(account.getType()) && sender != null && sender.getId() != null) {
+            log.debug("Org installation: using sender.id={} instead of account.id={}",
+                    sender.getId(), account.getId());
+            return sender.getId();
+        }
+        return account.getId();
     }
 
     private void connectRepositories(Long userId, Long installationId,

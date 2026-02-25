@@ -4,7 +4,7 @@
 봇이 작성한 리뷰 코멘트에 개발자가 답글을 달면, 저장된 리뷰 컨텍스트를 활용하여
 LLM이 해당 스레드에 대화형으로 응답하는 기능.
 
-## 상태: 미구현
+## 상태: **완료**
 
 ## 관련 파일 (예정)
 - `CommentWebhookHandler.java` - 댓글 Webhook 이벤트 처리
@@ -16,54 +16,12 @@ LLM이 해당 스레드에 대화형으로 응답하는 기능.
 ## 시퀀스 다이어그램
 
 ### 1차 리뷰 시 컨텍스트 저장
-```mermaid
-sequenceDiagram
-    participant PRS as PrReviewService
-    participant LLM as LlmClient
-    participant RCS as ReviewContextService
-    participant DB as MySQL
 
-    PRS->>LLM: review(systemPrompt, userPrompt)
-    LLM-->>PRS: ReviewResponse
-    PRS->>RCS: saveReviewContext(repoId, prNumber, feature, files, response)
-    RCS->>DB: INSERT review_context
-    Note over DB: 파일 요약, 코드 라인,<br/>리뷰 내용 저장
-```
+![1차 리뷰 컨텍스트 저장 흐름](assets/context-save.svg)
 
 ### 댓글 응답 흐름
-```mermaid
-sequenceDiagram
-    participant GH as GitHub
-    participant WC as WebhookController
-    participant CWH as CommentWebhookHandler
-    participant RCS as ReviewContextService
-    participant CRS as CommentResponseService
-    participant LLM as LlmClient
-    participant GRC as GitHubCommentReplyClient
 
-    GH->>WC: POST /api/webhook/github/pr
-    Note over WC: event: pull_request_review_comment<br/>action: created
-    WC->>CWH: handleReviewComment(payload)
-    CWH->>CWH: 봇 코멘트에 대한 답글인지 확인
-
-    alt 봇 답글이 아님
-        CWH-->>WC: 무시
-    else 봇 답글임
-        CWH->>RCS: getReviewContext(repoId, prNumber)
-        RCS-->>CWH: ReviewContext (파일 요약 + 코드 컨텍스트)
-        CWH->>GH: 스레드 전체 대화 내역 조회
-        GH-->>CWH: 댓글 스레드
-        CWH->>CRS: generateResponse(context, thread, newComment)
-        CRS->>LLM: review(systemPrompt, commentPrompt)
-        LLM-->>CRS: 응답 텍스트
-        CRS-->>CWH: responseText
-        CWH->>GRC: replyToThread(repoFullName, prNumber, commentId, responseText)
-        GRC->>GH: POST review comment reply
-        GH-->>GRC: 201 Created
-    end
-
-    WC-->>GH: 200 OK
-```
+![댓글 응답 흐름](assets/comment-reply-flow.svg)
 
 ## 범위 정의
 

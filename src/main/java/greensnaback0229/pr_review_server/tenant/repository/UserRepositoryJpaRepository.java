@@ -39,4 +39,6 @@ public interface UserRepositoryJpaRepository extends JpaRepository<UserRepositor
     @Modifying
     @Query("UPDATE UserRepository ur SET ur.isActive = false WHERE ur.repositoryId = :repositoryId AND ur.installationId = :installationId")
     int deactivateByRepositoryIdAndInstallationId(@Param("repositoryId") Long repositoryId, @Param("installationId") Long installationId);
+
+    Optional<UserRepository> findFirstByInstallationId(Long installationId);
 }
