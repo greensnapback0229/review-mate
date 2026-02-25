@@ -33,7 +33,7 @@ dependencies {
     runtimeOnly 'com.mysql:mysql-connector-j'
     
     // GitHub API
-    implementation 'org.kohsuke:github-api:1.319'
+    implementation 'org.kohsuke:github-api:1.330'
     
     // YAML 파싱
     implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml'
